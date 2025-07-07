@@ -37,6 +37,7 @@ end_timestamp = int(datetime.combine(end_date, datetime.max.time()).timestamp() 
 url = f"https://api.bitget.com/api/spot/v1/market/candles?symbol={symbol}&period={resolution}&limit={limit}"
 
 # Abfrage
+st.write("API URL:", url)
 response = requests.get(url)
 data = response.json()
 
