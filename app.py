@@ -35,15 +35,9 @@ end_timestamp = int(datetime.combine(end_date, datetime.max.time()).timestamp() 
 
 # Bitget OHLCV API Endpoint
 url = f"https://api.bitget.com/api/spot/v1/market/candles?symbol={symbol}_SP&granularity={resolution}&limit={limit}"
-headers = {
-    "ACCESS-KEY": api_key,
-    "ACCESS-SIGN": "",  # Placeholder (Signatur für private Endpunkte)
-    "ACCESS-TIMESTAMP": "",  # Placeholder
-    "ACCESS-PASSPHRASE": api_secret
-}
 
 # Abfrage
-response = requests.get(url, headers=headers)
+response = requests.get(url)
 data = response.json()
 
 # Daten verarbeiten
