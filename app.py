@@ -32,24 +32,36 @@ if not period:
 
 # Convert dates to UTC timestamps (in milliseconds)
 try:
+    # Validate date inputs
+    if start_date is None or end_date is None:
+        st.error("Bitte gültige Start- und Enddaten auswählen")
+        st.stop()
+    
+    # Ensure timezone-aware datetime objects
     start_dt = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
     end_dt = datetime.combine(end_date, datetime.min.time(), tzinfo=timezone.utc) + timedelta(days=1)
     now = datetime.now(timezone.utc)
     
+    # Convert to timestamps with fallback to current time
     start_timestamp = int(start_dt.timestamp() * 1000)
-    end_timestamp = min(int(end_dt.timestamp() * 1000), int(now.timestamp() * 1000))
+    end_timestamp = min(
+        int(end_dt.timestamp() * 1000),
+        int(now.timestamp() * 1000)  # Ensure we don't request future data
+    )
     
     if start_timestamp >= end_timestamp:
         st.error("Startdatum muss vor Enddatum liegen")
         st.stop()
         
 except Exception as e:
-    st.error(f"Datumskonvertierungsfehler: {e}")
+    st.error(f"Datumskonvertierungsfehler: {str(e)}")
     st.stop()
 
 # Symbol korrekt setzen (Bitget erwartet SP-Suffix)
 symbol = f"{coin}USDT_SP"
 url = f"https://api.bitget.com/api/spot/v1/market/candles?symbol={symbol}&period={period}&after={start_timestamp}&before={end_timestamp}&limit={max_bars}"
+
+# Rest of the code remains unchanged...
 
 # Zeige URL zur Kontrolle
 st.code(f"API URL: {url}", language="text")
