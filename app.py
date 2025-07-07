@@ -3,6 +3,7 @@ import pandas as pd
 import requests
 import plotly.graph_objects as go
 from datetime import datetime, timedelta, timezone
+import numpy as np
 
 st.set_page_config(page_title="Grid Bot Dashboard", layout="wide")
 st.title("📈 Grid Bot Dashboard – Live Bitget Daten")
@@ -20,9 +21,6 @@ with st.sidebar:
     st.subheader("📊 Chart-Optionen")
     chart_type = st.selectbox("Chart-Typ", ["Candlestick", "Linie"], index=0)
     show_volume = st.checkbox("Volumen anzeigen", True)
-    show_moving_average = st.checkbox("Gleitenden Durchschnitt anzeigen", False)
-    if show_moving_average:
-        ma_period = st.slider("MA-Periode", 5, 50, 20)
 
 # Bitget interval mapping
 interval_mapping = {
@@ -105,25 +103,37 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
         columns=["timestamp", "open", "high", "low", "close", "volume", "quote_volume"]
     )
     
-    # Process data - FIXED TIMESTAMP CONVERSION
-    # Convert to numeric first
-    df["timestamp"] = pd.to_numeric(df["timestamp"], errors="coerce")
-    # Handle missing values
-    df = df.dropna(subset=["timestamp"])
-    # Convert to datetime with UTC timezone
-    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
-    # Convert to local timezone for display
+    # DEBUG: Show raw data structure
+    with st.expander("🔍 Rohdatenstruktur anzeigen"):
+        st.write("Erste 5 Zeilen vor Konvertierung:")
+        st.dataframe(df.head())
+        st.write("Daten-Typen vor Konvertierung:")
+        st.write(df.dtypes)
+    
+    # FIXED DATA CONVERSION
+    # Convert timestamp to datetime
+    df["timestamp"] = pd.to_datetime(df["timestamp"].astype(np.int64), unit="ms", utc=True)
     df["timestamp"] = df["timestamp"].dt.tz_convert(None)
     
-    numeric_cols = ["open", "high", "low", "close", "volume"]
-    df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
+    # Convert price columns to float
+    price_cols = ["open", "high", "low", "close"]
+    for col in price_cols:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    
+    # Convert volume to float
+    df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
+    
+    # DEBUG: Show converted data
+    with st.expander("🔍 Konvertierte Daten anzeigen"):
+        st.write("Erste 5 Zeilen nach Konvertierung:")
+        st.dataframe(df.head())
+        st.write("Daten-Typen nach Konvertierung:")
+        st.write(df.dtypes)
+        st.write(f"Min Close: {df['close'].min()}, Max Close: {df['close'].max()}")
     
     # Calculate additional metrics
     df["price_change"] = df["close"].pct_change() * 100
     df["range"] = (df["high"] - df["low"]) / df["low"] * 100
-    
-    if show_moving_average:
-        df[f"MA_{ma_period}"] = df["close"].rolling(window=ma_period).mean()
     
     st.subheader(f"📊 {symbol} {interval} Chart")
 
@@ -151,16 +161,6 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
             line=dict(color='#3498DB', width=2)
         ))
     
-    # Add moving average if enabled
-    if show_moving_average:
-        fig.add_trace(go.Scatter(
-            x=df['timestamp'],
-            y=df[f"MA_{ma_period}"],
-            mode='lines',
-            name=f'MA {ma_period}',
-            line=dict(color='#F39C12', width=2, dash='dash')
-        ))
-    
     # Add volume if enabled
     if show_volume:
         fig.add_trace(go.Bar(
@@ -171,7 +171,7 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
             yaxis='y2'
         ))
     
-    # Layout configuration with FIXED DATE HANDLING
+    # Layout configuration
     fig.update_layout(
         height=600,
         title=f"{symbol} {interval} Chart",
@@ -186,6 +186,7 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
             nticks=20
         ),
         yaxis=dict(
+            autorange=True,
             fixedrange=False
         ),
         yaxis2=dict(
@@ -222,7 +223,7 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
         col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.metric("Aktueller Preis", f"{latest['close']:.2f}", 
-                     f"{df['price_change'].iloc[-1]:.2f}%")
+                     f"{df['price_change'].iloc[-1]:.2f}%" if not pd.isnull(df['price_change'].iloc[-1]) else "0.00%")
         with col2:
             st.metric("Tageshöchst", f"{df['high'].max():.2f}")
         with col3:
@@ -230,8 +231,8 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
         with col4:
             st.metric("Durchschnittsbereich", f"{df['range'].mean():.2f}%")
     
-    # Data table with FIXED COLUMNS
-    with st.expander("📄 Vollständige Datten anzeigen"):
+    # Data table
+    with st.expander("📄 Vollständige Daten anzeigen"):
         # Select only valid columns that exist
         valid_columns = [col for col in ["timestamp", "open", "high", "low", "close", "volume", "price_change"] 
                          if col in df.columns]
