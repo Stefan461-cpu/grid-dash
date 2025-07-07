@@ -26,7 +26,7 @@ api_key = st.secrets["BITGET_API_KEY"]
 api_secret = st.secrets["BITGET_API_SECRET"]
 
 # API-Parameter definieren
-symbol = coin + "USDT"
+symbol = coin + "USDT_SP"
 resolution = interval
 limit = max_bars
 
