@@ -53,8 +53,8 @@ except Exception as e:
     st.error(f"Datumskonvertierungsfehler: {str(e)}")
     st.stop()
 
-# CORRECTED SYMBOL FORMAT - Bitget requires SPOT symbols in specific format
-symbol = f"{coin}USDT_UMCBL"  # Spot trading format
+# CORRECTED SYMBOL FORMAT - FINALLY VERIFIED WITH BITGET API
+symbol = f"{coin}USDT_SPBL"  # CORRECT FORMAT FOR SPOT TRADING
 
 # CORRECTED API parameters
 url = f"https://api.bitget.com/api/spot/v1/market/candles?symbol={symbol}&period={period}&after={start_timestamp}&before={end_timestamp}&limit={max_bars}"
