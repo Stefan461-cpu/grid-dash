@@ -21,6 +21,10 @@ with st.sidebar:
 
     max_bars = st.number_input("Max. Kerzen (bitget limit: 1000)", min_value=10, max_value=1000, value=500)
 
+# API Keys aus Streamlit Secrets laden
+api_key = st.secrets["BITGET_API_KEY"]
+api_secret = st.secrets["BITGET_API_SECRET"]
+
 # API-Parameter definieren
 symbol = coin + "USDT"
 resolution = interval
@@ -31,9 +35,15 @@ end_timestamp = int(datetime.combine(end_date, datetime.max.time()).timestamp() 
 
 # Bitget OHLCV API Endpoint
 url = f"https://api.bitget.com/api/spot/v1/market/candles?symbol={symbol}_SP&granularity={resolution}&limit={limit}"
+headers = {
+    "ACCESS-KEY": api_key,
+    "ACCESS-SIGN": "",  # Placeholder (Signatur für private Endpunkte)
+    "ACCESS-TIMESTAMP": "",  # Placeholder
+    "ACCESS-PASSPHRASE": api_secret
+}
 
 # Abfrage
-response = requests.get(url)
+response = requests.get(url, headers=headers)
 data = response.json()
 
 # Daten verarbeiten
