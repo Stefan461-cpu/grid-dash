@@ -34,7 +34,7 @@ start_timestamp = int(datetime.combine(start_date, datetime.min.time()).timestam
 end_timestamp = int(datetime.combine(end_date, datetime.max.time()).timestamp() * 1000)
 
 # Bitget OHLCV API Endpoint
-url = f"https://api.bitget.com/api/spot/v1/market/candles?symbol={symbol}&period={resolution}&limit={limit}"
+url = f"https://api.bitget.com/api/spot/v1/market/candles?symbol={symbol}&period={interval}&limit={limit}"
 
 # Abfrage
 st.write("API URL:", url)
