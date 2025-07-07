@@ -3,7 +3,6 @@ import pandas as pd
 import requests
 import plotly.graph_objects as go
 from datetime import datetime, timedelta, timezone
-import numpy as np
 
 st.set_page_config(page_title="Grid Bot Dashboard", layout="wide")
 st.title("📈 Grid Bot Dashboard – Live Bitget Daten")
@@ -18,9 +17,8 @@ with st.sidebar:
     end_date = st.date_input("Enddatum", today)
     max_bars = st.slider("Max. Kerzen (10–1000)", 10, 1000, 500)
     
-    # Add chart customization options
     st.subheader("📊 Chart-Optionen")
-    chart_type = st.selectbox("Chart-Typ", ["Candlestick", "Linie", "Bereich"], index=0)
+    chart_type = st.selectbox("Chart-Typ", ["Candlestick", "Linie"], index=0)
     show_volume = st.checkbox("Volumen anzeigen", True)
     show_moving_average = st.checkbox("Gleitenden Durchschnitt anzeigen", False)
     if show_moving_average:
@@ -46,6 +44,7 @@ try:
         st.error("Bitte gültige Start- und Enddaten auswählen")
         st.stop()
     
+    # Use 00:00 UTC for start, and 23:59:59 for end
     start_dt = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
     end_dt = datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc) - timedelta(seconds=1)
     now = datetime.now(timezone.utc)
@@ -106,9 +105,16 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
         columns=["timestamp", "open", "high", "low", "close", "volume", "quote_volume"]
     )
     
-    # Process data
-    df = df.sort_values(by="timestamp")
-    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+    # Process data - FIXED TIMESTAMP CONVERSION
+    # Convert to numeric first
+    df["timestamp"] = pd.to_numeric(df["timestamp"], errors="coerce")
+    # Handle missing values
+    df = df.dropna(subset=["timestamp"])
+    # Convert to datetime with UTC timezone
+    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
+    # Convert to local timezone for display
+    df["timestamp"] = df["timestamp"].dt.tz_convert(None)
+    
     numeric_cols = ["open", "high", "low", "close", "volume"]
     df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
     
@@ -136,22 +142,13 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
             increasing_line_color='#2ECC71',  # green
             decreasing_line_color='#E74C3C'   # red
         ))
-    elif chart_type == "Linie":
+    else:  # Linie
         fig.add_trace(go.Scatter(
             x=df['timestamp'],
             y=df['close'],
             mode='lines',
             name='Schlusskurs',
             line=dict(color='#3498DB', width=2)
-        ))
-    else:  # Bereich
-        fig.add_trace(go.Scatter(
-            x=df['timestamp'],
-            y=df['close'],
-            fill='tozeroy',
-            name='Preisbereich',
-            fillcolor='rgba(52, 152, 219, 0.2)',
-            line=dict(color='#3498DB', width=1)
         ))
     
     # Add moving average if enabled
@@ -174,26 +171,21 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
             yaxis='y2'
         ))
     
-    # Calculate dynamic range for y-axis
-    price_range = df['high'].max() - df['low'].min()
-    if price_range == 0:  # Handle flat markets
-        price_range = df['close'].mean() * 0.01  # 1% range
-    y_min = df['low'].min() - price_range * 0.1
-    y_max = df['high'].max() + price_range * 0.1
-    
-    # Layout configuration
+    # Layout configuration with FIXED DATE HANDLING
     fig.update_layout(
         height=600,
         title=f"{symbol} {interval} Chart",
         yaxis_title="Preis (USDT)",
         xaxis_title="Zeit",
         template="plotly_dark",
-        xaxis_rangeslider_visible=False,
-        showlegend=True,
-        hovermode='x unified',
+        xaxis=dict(
+            type='date',
+            tickformat='%Y-%m-%d %H:%M',
+            rangeslider_visible=False,
+            tickmode='auto',
+            nticks=20
+        ),
         yaxis=dict(
-            range=[y_min, y_max],
-            autorange=False,
             fixedrange=False
         ),
         yaxis2=dict(
@@ -203,46 +195,47 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
             showgrid=False,
             visible=show_volume
         ),
-        margin=dict(l=50, r=50, t=80, b=50)
+        margin=dict(l=50, r=50, t=80, b=100),
+        hovermode='x unified'
     )
     
     # Add annotations for key metrics
-    latest = df.iloc[-1]
-    fig.add_annotation(
-        x=latest['timestamp'],
-        y=latest['close'],
-        text=f"Letzter Preis: {latest['close']:.2f}",
-        showarrow=True,
-        arrowhead=1,
-        ax=-50,
-        ay=-40,
-        bgcolor="black",
-        bordercolor="white"
-    )
-    
-    # Add technical indicators
-    fig.add_hline(y=df['close'].mean(), line_dash="dot", 
-                 annotation_text=f"Durchschnitt: {df['close'].mean():.2f}", 
-                 annotation_position="bottom right")
+    if not df.empty:
+        latest = df.iloc[-1]
+        fig.add_annotation(
+            x=latest['timestamp'],
+            y=latest['close'],
+            text=f"Letzter Preis: {latest['close']:.2f}",
+            showarrow=True,
+            arrowhead=1,
+            ax=-50,
+            ay=-40,
+            bgcolor="black",
+            bordercolor="white"
+        )
     
     st.plotly_chart(fig, use_container_width=True)
     
     # Display key metrics
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Aktueller Preis", f"{latest['close']:.2f}", 
-                 f"{df['price_change'].iloc[-1]:.2f}%")
-    with col2:
-        st.metric("Tageshöchst", f"{df['high'].max():.2f}")
-    with col3:
-        st.metric("Tagestief", f"{df['low'].min():.2f}")
-    with col4:
-        st.metric("Durchschnittsbereich", f"{df['range'].mean():.2f}%")
+    if not df.empty:
+        latest = df.iloc[-1]
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Aktueller Preis", f"{latest['close']:.2f}", 
+                     f"{df['price_change'].iloc[-1]:.2f}%")
+        with col2:
+            st.metric("Tageshöchst", f"{df['high'].max():.2f}")
+        with col3:
+            st.metric("Tagestief", f"{df['low'].min():.2f}")
+        with col4:
+            st.metric("Durchschnittsbereich", f"{df['range'].mean():.2f}%")
     
-    # Data table
-    with st.expander("📄 Vollständige Daten anzeigen"):
-        st.dataframe(df[["timestamp", "open", "high", "low", "close", "volume", "price_change"]], 
-                    use_container_width=True)
+    # Data table with FIXED COLUMNS
+    with st.expander("📄 Vollständige Datten anzeigen"):
+        # Select only valid columns that exist
+        valid_columns = [col for col in ["timestamp", "open", "high", "low", "close", "volume", "price_change"] 
+                         if col in df.columns]
+        st.dataframe(df[valid_columns], use_container_width=True)
 else:
     st.error("❌ Ungültige API-Antwortstruktur")
     st.json(data)
