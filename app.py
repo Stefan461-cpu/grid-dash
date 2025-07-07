@@ -23,7 +23,7 @@ interval_mapping = {
     "15m": "15min",
     "1h": "1H",
     "4h": "4H",
-    "1d": "1D"  # Must be uppercase 'D'
+    "1d": "1D"
 }
 period = interval_mapping.get(interval)
 if not period:
@@ -49,20 +49,16 @@ try:
         st.error("Startdatum muss vor Enddatum liegen und mindestens 1 Minute Unterschied haben")
         st.stop()
         
-    # Verify time range doesn't exceed Bitget limits
-    max_range_days = 90  # Bitget's max range for minute data
-    if (end_dt - start_dt) > timedelta(days=max_range_days):
-        st.error(f"Zeitraum zu lang! Maximal {max_range_days} Tage für minütliche Daten.")
-        st.stop()
-        
 except Exception as e:
     st.error(f"Datumskonvertierungsfehler: {str(e)}")
     st.stop()
 
-# Symbol must use correct case (BTCUSDT_SP)
-symbol = f"{coin}USDT_SP".upper()
+# CORRECTED SYMBOL FORMAT - Bitget uses COIN/USDT:USDT format
+# Instead of BTCUSDT_SP, we need BTCUSDT or BTC/USDT:USDT
+symbol = f"{coin}USDT"  # Basic format
+# Alternatively for spot trading: f"{coin}/USDT:USDT"
 
-# CORRECTED API parameters (Bitget uses 'period', 'after', 'before')
+# CORRECTED API parameters
 url = f"https://api.bitget.com/api/spot/v1/market/candles?symbol={symbol}&period={period}&after={start_timestamp}&before={end_timestamp}&limit={max_bars}"
 
 st.code(f"API URL: {url}", language="text")
@@ -75,34 +71,21 @@ headers = {
 
 try:
     response = requests.get(url, headers=headers, timeout=15)
-    
-    # Handle 400 errors with detailed diagnostics
-    if response.status_code == 400:
-        try:
-            error_data = response.json()
-            st.error(f"❌ Bitget API-Fehler (Code {error_data.get('code')}): {error_data.get('msg')}")
-            
-            # Suggest common fixes
-            if "period" in error_data.get("msg", "").lower():
-                st.warning("⚠️ Mögliche Lösung: Überprüfe das Intervall-Format (1min, 1H, 1D)")
-            if "symbol" in error_data.get("msg", "").lower():
-                st.warning("⚠️ Mögliche Lösung: Symbolformat sollte 'COINUSDT_SP' sein (z.B. BTCUSDT_SP)")
-            if "time" in error_data.get("msg", "").lower():
-                st.warning("⚠️ Mögliche Lösung: Verkürze den Zeitraum oder wähle ein größeres Intervall")
-                
-            st.stop()
-        except:
-            st.error(f"❌ Unbekannter Bitget-Fehler: {response.text[:200]}")
-            st.stop()
-    
-    response.raise_for_status()
     data = response.json()
     
-    # Handle Bitget's success code
+    # Handle API errors first
     if isinstance(data, dict) and data.get("code") != "00000":
         error_msg = data.get("msg", "Unbekannter API-Fehler")
         st.error(f"❌ Bitget API-Fehler: {error_msg} (Code: {data.get('code')})")
+        
+        # Suggest symbol format fix if we get symbol-related error
+        if "symbol" in error_msg.lower() or "40034" in error_msg:
+            st.warning(f"⚠️ Symbolformat möglicherweise falsch. Versuche stattdessen: {coin}/USDT:USDT")
+            st.code(f"Alternative URL: https://api.bitget.com/api/spot/v1/market/candles?symbol={coin}%2FUSDT%3AUSDT&period={period}&after={start_timestamp}&before={end_timestamp}&limit={max_bars}")
+        
         st.stop()
+        
+    response.raise_for_status()
         
 except requests.exceptions.RequestException as e:
     st.error(f"❌ Netzwerkfehler: {str(e)}")
