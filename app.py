@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
+import altair as alt
 from datetime import datetime, timedelta, timezone
 
 st.set_page_config(page_title="Grid Bot Dashboard", layout="wide")
@@ -16,14 +17,14 @@ with st.sidebar:
     end_date = st.date_input("Enddatum", today)
     max_bars = st.slider("Max. Kerzen (10–1000)", 10, 1000, 500)
 
-# CORRECTED Bitget interval mapping
+# CORRECTED Bitget interval mapping for ALL intervals
 interval_mapping = {
     "1m": "1min",
     "5m": "5min",
     "15m": "15min",
-    "1h": "1H",
-    "4h": "4H",
-    "1d": "1D"
+    "1h": "1H",  # Bitget uses '1H' for 1 hour
+    "4h": "4H",  # Bitget uses '4H' for 4 hours
+    "1d": "1D"   # Bitget uses '1D' for daily
 }
 period = interval_mapping.get(interval)
 if not period:
@@ -44,7 +45,7 @@ try:
     start_timestamp = int(start_dt.timestamp() * 1000)
     end_timestamp = min(int(end_dt.timestamp() * 1000), int(now.timestamp() * 1000))
     
-    # Ensure valid time range (at least 1 minute difference)
+    # Ensure valid time range
     if start_timestamp >= end_timestamp:
         st.error("Startdatum muss vor Enddatum liegen und mindestens 1 Minute Unterschied haben")
         st.stop()
@@ -53,15 +54,15 @@ except Exception as e:
     st.error(f"Datumskonvertierungsfehler: {str(e)}")
     st.stop()
 
-# CORRECTED SYMBOL FORMAT - FINALLY VERIFIED WITH BITGET API
-symbol = f"{coin}USDT_SPBL"  # CORRECT FORMAT FOR SPOT TRADING
+# Symbol format for spot trading
+symbol = f"{coin}USDT_SPBL"
 
-# CORRECTED API parameters
+# API parameters
 url = f"https://api.bitget.com/api/spot/v1/market/candles?symbol={symbol}&period={period}&after={start_timestamp}&before={end_timestamp}&limit={max_bars}"
 
 st.code(f"API URL: {url}", language="text")
 
-# Add API headers to avoid rate limiting
+# Add API headers
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
     "Accept": "application/json",
@@ -72,18 +73,18 @@ try:
     response = requests.get(url, headers=headers, timeout=15)
     data = response.json()
     
-    # Handle API errors first
+    # Handle API errors
     if isinstance(data, dict) and data.get("code") != "00000":
         error_msg = data.get("msg", "Unbekannter API-Fehler")
         st.error(f"❌ Bitget API-Fehler: {error_msg} (Code: {data.get('code')})")
         
-        # Display full error details for debugging
+        # Show details for debugging
         with st.expander("🔍 Fehlerdetails anzeigen"):
             st.json(data)
         
         st.stop()
         
-    # Check HTTP status after API error code
+    # Check HTTP status
     response.raise_for_status()
         
 except requests.exceptions.RequestException as e:
@@ -113,7 +114,18 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
     df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
     
     st.subheader(f"📊 Kursverlauf {symbol} [{interval}]")
-    st.line_chart(df.set_index("timestamp")["close"], height=300)
+    
+    # FIXED CHART: Using Altair for better visualization
+    chart = alt.Chart(df).mark_line().encode(
+        x='timestamp:T',
+        y='close:Q',
+        tooltip=['timestamp', 'close']
+    ).properties(
+        height=400,
+        width=800
+    ).interactive()
+    
+    st.altair_chart(chart, use_container_width=True)
 
     with st.expander("📄 Tabelle anzeigen"):
         st.dataframe(df[["timestamp", "open", "high", "low", "close", "volume"]], use_container_width=True)
