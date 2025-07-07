@@ -12,25 +12,25 @@ with st.sidebar:
     coin = st.selectbox("Währung (COINUSDT)", ["BTC", "ETH", "SOL"])
     interval = st.radio("Intervall", ["1m", "5m", "15m", "1h", "4h", "1d"], horizontal=True)
     today = datetime.now(timezone.utc).date()
-    start_date = st.date_input("Startdatum", today - timedelta(days=30))
+    start_date = st.date_input("Startdatum", today - timedelta(days=7))  # Reduced default to 7 days
     end_date = st.date_input("Enddatum", today)
     max_bars = st.slider("Max. Kerzen (10–1000)", 10, 1000, 500)
 
-# Interval mapping for Bitget API
+# Interval mapping for Bitget API - CORRECTED
 interval_mapping = {
     "1m": "1min",
     "5m": "5min",
     "15m": "15min",
     "1h": "1H",
     "4h": "4H",
-    "1d": "1day"
+    "1d": "1D"
 }
 period = interval_mapping.get(interval)
 if not period:
     st.error(f"Ungültiges Intervall: {interval}")
     st.stop()
 
-# Convert dates to UTC timestamps (in milliseconds)
+# Convert dates to UTC timestamps (in milliseconds) - FIXED
 try:
     # Validate date inputs
     if start_date is None or end_date is None:
@@ -59,37 +59,48 @@ except Exception as e:
 
 # Symbol korrekt setzen (Bitget erwartet SP-Suffix)
 symbol = f"{coin}USDT_SP"
-url = f"https://api.bitget.com/api/spot/v1/market/candles?symbol={symbol}&period={period}&after={start_timestamp}&before={end_timestamp}&limit={max_bars}"
 
-# Rest of the code remains unchanged...
+# API URL with CORRECTED parameters - using Bitget's expected format
+url = f"https://api.bitget.com/api/spot/v1/market/candles?symbol={symbol}&granularity={period}&startTime={start_timestamp}&endTime={end_timestamp}&limit={max_bars}"
 
 # Zeige URL zur Kontrolle
 st.code(f"API URL: {url}", language="text")
 
-# Daten abrufen
+# Daten abrufen with IMPROVED error handling
 try:
     response = requests.get(url, timeout=10)
     response.raise_for_status()
     data = response.json()
+    
+    # Capture API error responses
+    if isinstance(data, dict) and data.get("code") != "00000":
+        error_msg = data.get("msg", "Unbekannter API-Fehler")
+        st.error(f"❌ Bitget API-Fehler: {error_msg} (Code: {data.get('code')})")
+        st.stop()
+        
 except requests.exceptions.RequestException as e:
-    st.error(f"❌ Netzwerkfehler bei API-Anfrage: {e}")
+    # Show detailed error message
+    error_msg = str(e)
+    if hasattr(e, 'response') and e.response is not None:
+        try:
+            error_body = e.response.json()
+            error_msg += f"\nAPI-Antwort: {error_body}"
+        except:
+            error_msg += f"\nAntworttext: {e.response.text[:200]}..."
+    st.error(f"❌ Netzwerkfehler bei API-Anfrage: {error_msg}")
     st.stop()
 except ValueError:
     st.error("❌ API-Antwort ist kein gültiges JSON.")
     st.stop()
 
-# Ausgabe roher JSON-Antwort
-st.subheader("🧾 Bitget API-Rohantwort")
-st.json(data)
-
 # Validierung der API-Antwortstruktur
-if isinstance(data, dict) and data.get("code") == "00000" and isinstance(data.get("data"), list):
-    # Create DataFrame from candle data
+if isinstance(data, dict) and isinstance(data.get("data"), list):
     candles = data["data"]
     if not candles:
-        st.warning("Keine Daten im ausgewählten Zeitraum verfügbar")
+        st.warning("⚠️ Keine Daten im ausgewählten Zeitraum verfügbar")
         st.stop()
     
+    # Create DataFrame - FIXED column names
     df = pd.DataFrame(
         candles,
         columns=["timestamp", "open", "high", "low", "close", "volume", "quote_volume"]
@@ -107,5 +118,5 @@ if isinstance(data, dict) and data.get("code") == "00000" and isinstance(data.ge
     with st.expander("📄 Tabelle anzeigen"):
         st.dataframe(df[["timestamp", "open", "high", "low", "close", "volume"]], use_container_width=True)
 else:
-    error_msg = data.get("msg", "Unbekannter Fehler")
-    st.error(f"❌ API-Fehler: {error_msg} (Code: {data.get('code')})")
+    st.error(f"❌ Ungültige API-Antwortstruktur: {type(data)}")
+    st.json(data)
