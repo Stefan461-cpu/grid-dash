@@ -53,10 +53,8 @@ except Exception as e:
     st.error(f"Datumskonvertierungsfehler: {str(e)}")
     st.stop()
 
-# CORRECTED SYMBOL FORMAT - Bitget uses COIN/USDT:USDT format
-# Instead of BTCUSDT_SP, we need BTCUSDT or BTC/USDT:USDT
-symbol = f"{coin}USDT"  # Basic format
-# Alternatively for spot trading: f"{coin}/USDT:USDT"
+# CORRECTED SYMBOL FORMAT - Bitget requires SPOT symbols in specific format
+symbol = f"{coin}USDT_UMCBL"  # Spot trading format
 
 # CORRECTED API parameters
 url = f"https://api.bitget.com/api/spot/v1/market/candles?symbol={symbol}&period={period}&after={start_timestamp}&before={end_timestamp}&limit={max_bars}"
@@ -66,7 +64,8 @@ st.code(f"API URL: {url}", language="text")
 # Add API headers to avoid rate limiting
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-    "Accept": "application/json"
+    "Accept": "application/json",
+    "Content-Type": "application/json"
 }
 
 try:
@@ -78,13 +77,13 @@ try:
         error_msg = data.get("msg", "Unbekannter API-Fehler")
         st.error(f"❌ Bitget API-Fehler: {error_msg} (Code: {data.get('code')})")
         
-        # Suggest symbol format fix if we get symbol-related error
-        if "symbol" in error_msg.lower() or "40034" in error_msg:
-            st.warning(f"⚠️ Symbolformat möglicherweise falsch. Versuche stattdessen: {coin}/USDT:USDT")
-            st.code(f"Alternative URL: https://api.bitget.com/api/spot/v1/market/candles?symbol={coin}%2FUSDT%3AUSDT&period={period}&after={start_timestamp}&before={end_timestamp}&limit={max_bars}")
+        # Display full error details for debugging
+        with st.expander("🔍 Fehlerdetails anzeigen"):
+            st.json(data)
         
         st.stop()
         
+    # Check HTTP status after API error code
     response.raise_for_status()
         
 except requests.exceptions.RequestException as e:
