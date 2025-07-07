@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
-import altair as alt
+import plotly.graph_objects as go
 from datetime import datetime, timedelta, timezone
 
 st.set_page_config(page_title="Grid Bot Dashboard", layout="wide")
@@ -17,14 +17,14 @@ with st.sidebar:
     end_date = st.date_input("Enddatum", today)
     max_bars = st.slider("Max. Kerzen (10–1000)", 10, 1000, 500)
 
-# CORRECTED Bitget interval mapping for ALL intervals
+# CORRECTED Bitget interval mapping based on error message
 interval_mapping = {
     "1m": "1min",
     "5m": "5min",
     "15m": "15min",
-    "1h": "1H",  # Bitget uses '1H' for 1 hour
-    "4h": "4H",  # Bitget uses '4H' for 4 hours
-    "1d": "1D"   # Bitget uses '1D' for daily
+    "1h": "1h",    # Changed from "1H" to "1h"
+    "4h": "4h",    # Changed from "4H" to "4h"
+    "1d": "1day"   # Changed from "1D" to "1day"
 }
 period = interval_mapping.get(interval)
 if not period:
@@ -115,19 +115,28 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
     
     st.subheader(f"📊 Kursverlauf {symbol} [{interval}]")
     
-    # FIXED CHART: Using Altair for better visualization
-    chart = alt.Chart(df).mark_line().encode(
-        x='timestamp:T',
-        y='close:Q',
-        tooltip=['timestamp', 'close']
-    ).properties(
-        height=400,
-        width=800
-    ).interactive()
+    # FIXED CHART: Using Plotly for reliable, interactive visualization
+    fig = go.Figure(data=[go.Candlestick(
+        x=df['timestamp'],
+        open=df['open'],
+        high=df['high'],
+        low=df['low'],
+        close=df['close'],
+        name='Kursverlauf'
+    )])
     
-    st.altair_chart(chart, use_container_width=True)
+    fig.update_layout(
+        height=600,
+        xaxis_rangeslider_visible=False,
+        title=f"{symbol} {interval} Chart",
+        yaxis_title="Preis (USDT)",
+        xaxis_title="Zeit",
+        template="plotly_dark"
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
 
-    with st.expander("📄 Tabelle anzeigen"):
+    with st.expander("📄 Tabellle anzeigen"):
         st.dataframe(df[["timestamp", "open", "high", "low", "close", "volume"]], use_container_width=True)
 else:
     st.error("❌ Ungültige API-Antwortstruktur")
