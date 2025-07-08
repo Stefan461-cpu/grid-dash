@@ -1,4 +1,3 @@
-# services/bot.py
 import numpy as np
 import pandas as pd
 
@@ -91,7 +90,9 @@ def simulate_grid_bot(df, total_investment, lower_price, upper_price, num_grids,
                     active_grids.remove(grid_index)
     
     # Calculate final results
-    final_value = position["usdt"] + position["coin"] * df.iloc[-1]['close']
+    final_usdt = position["usdt"]
+    final_coin = position["coin"]
+    final_value = final_usdt + final_coin * df.iloc[-1]['close']
     profit_usdt = final_value - total_investment
     profit_pct = (profit_usdt / total_investment) * 100
     
@@ -103,5 +104,12 @@ def simulate_grid_bot(df, total_investment, lower_price, upper_price, num_grids,
         "fees_paid": fees_paid,
         "grid_lines": grid_lines,
         "trade_log": trade_log,
-        "final_position": position
+        "final_position": {
+            "usdt": final_usdt,
+            "coin": final_coin
+        },
+        "num_trades": len(trade_log),
+        "average_investment_per_grid": investment_per_grid,
+        "num_grids": num_grids,
+        "reserved_amount": reserved_amount
     }
