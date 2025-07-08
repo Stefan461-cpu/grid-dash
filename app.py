@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta, timezone
 import numpy as np
 
-st.set_page_config(page_title="Grrid Bot Dashboard", layout="wide")
+st.set_page_config(page_title="Grid Bot Dashboard", layout="wide")
 st.title("📈 Grid Bot Dashboard – Live Bitget Daten")
 
 # Seitenleiste für Einstellungen
@@ -97,6 +97,10 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
         st.warning("⚠️ Keine Daten im ausgewählten Zeitraum verfügbar. Tipp: Verkürze den Zeitraum oder wähle ein kleineres Intervall.")
         st.stop()
     
+    # DEBUG: Show raw API response
+    with st.expander("🔍 API-Rohantwort anzeigen"):
+        st.json(data)
+    
     # Create DataFrame
     df = pd.DataFrame(
         candles,
@@ -110,53 +114,54 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
         st.write("Daten-Typen vor Konvertierung:")
         st.write(df.dtypes)
     
-    # FIXED DATA CONVERSION - HANDLE EUROPEAN DECIMAL FORMATS
-    def convert_to_float(value):
-        """Convert string to float, handling both '.' and ',' decimal separators"""
+    # FIXED DATA CONVERSION - COMPREHENSIVE HANDLING
+    # Custom conversion function with enhanced error handling
+    def safe_convert(value):
+        """Safely convert values to appropriate types"""
+        if value in [None, "None", "null", "NaN", ""]:
+            return np.nan
+            
         if isinstance(value, str):
-            # Replace comma with dot for European decimal format
-            value = value.replace(',', '.')
-            # Remove any non-numeric characters except dots and minus signs
+            # Clean numeric strings
+            value = value.replace(',', '.')  # Handle European decimals
+            # Remove any non-numeric characters except decimal points and minus signs
             value = ''.join(ch for ch in value if ch in '0123456789.-')
+            if value == '':
+                return np.nan
+                
         try:
+            # Try converting to float first
             return float(value)
         except (ValueError, TypeError):
-            return float('nan')
+            return np.nan
     
-    # Convert timestamp safely
+    # Process all columns with comprehensive error handling
     try:
-        # Convert to numeric first with error handling
-        df["timestamp"] = pd.to_numeric(df["timestamp"], errors="coerce")
-        
-        # Remove rows with invalid timestamps
+        # Convert timestamp
+        df["timestamp"] = df["timestamp"].apply(safe_convert)
         df = df.dropna(subset=["timestamp"])
-        
-        # Convert to datetime
         df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True, errors="coerce")
         df["timestamp"] = df["timestamp"].dt.tz_convert(None)
+        
+        # Convert price columns
+        price_cols = ["open", "high", "low", "close"]
+        for col in price_cols:
+            df[col] = df[col].apply(safe_convert)
+        
+        # Convert volume columns
+        volume_cols = ["volume", "quote_volume"]
+        for col in volume_cols:
+            df[col] = df[col].apply(safe_convert)
+        
+        # Remove any rows with all price data missing
+        df = df.dropna(subset=price_cols, how='all')
+        
     except Exception as e:
-        st.error(f"Fehler bei der Zeitstempelkonvertierung: {str(e)}")
+        st.error(f"Kritischer Fehler bei der Datenkonvertierung: {str(e)}")
+        with st.expander("🔍 Fehlerdetails anzeigen"):
+            st.write("Datenrahmen während des Fehlers:")
+            st.dataframe(df.head())
         st.stop()
-    
-    # Convert price columns to float with custom decimal handling
-    price_cols = ["open", "high", "low", "close"]
-    for col in price_cols:
-        try:
-            # Use our custom conversion function
-            df[col] = df[col].apply(convert_to_float)
-        except Exception as e:
-            st.error(f"Fehler bei der Konvertierung von {col}: {str(e)}")
-            st.stop()
-    
-    # Convert volume to float
-    try:
-        df["volume"] = df["volume"].apply(convert_to_float)
-    except Exception as e:
-        st.error(f"Fehler bei der Volumenkonvertierung: {str(e)}")
-        st.stop()
-    
-    # Remove any rows with invalid price data
-    df = df.dropna(subset=price_cols)
     
     # DEBUG: Show converted data
     with st.expander("🔍 Konvertierte Daten anzeigen"):
@@ -174,7 +179,7 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
     
     # Calculate additional metrics
     df["price_change"] = df["close"].pct_change() * 100
-    df["range"] = (df["high"] - df["low"]) / df["low"] * 100
+    df["range"] = (df["high"] - df["low"]) / df["low"].replace(0, np.nan) * 100
     
     st.subheader(f"📊 {symbol} {interval} Chart")
 
@@ -203,7 +208,7 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
         ))
     
     # Add volume if enabled
-    if show_volume:
+    if show_volume and not df['volume'].isnull().all():
         fig.add_trace(go.Bar(
             x=df['timestamp'],
             y=df['volume'],
@@ -231,11 +236,11 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
             fixedrange=False
         ),
         yaxis2=dict(
-            title="Volumen" if show_volume else "",
+            title="Volumen" if show_volume and not df['volume'].isnull().all() else "",
             overlaying='y',
             side='right',
             showgrid=False,
-            visible=show_volume
+            visible=show_volume and not df['volume'].isnull().all()
         ),
         margin=dict(l=50, r=50, t=80, b=100),
         hovermode='x unified'
@@ -271,15 +276,16 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
         with col3:
             st.metric("Tagestief", f"{df['low'].min():.2f}")
         with col4:
-            st.metric("Durchschnittsbereich", f"{df['range'].mean():.2f}%")
+            avg_range = df['range'].mean() if not df['range'].isnull().all() else 0
+            st.metric("Durchschnittsbereich", f"{avg_range:.2f}%")
     
     # Data table
     with st.expander("📄 Vollständige Daten anzeigen"):
         # Format numbers properly
         formatted_df = df.copy()
-        for col in ["open", "high", "low", "close", "volume"]:
+        for col in ["open", "high", "low", "close", "volume", "quote_volume"]:
             if col in formatted_df.columns:
-                formatted_df[col] = formatted_df[col].apply(lambda x: f"{x:,.2f}" if not pd.isnull(x) else "")
+                formatted_df[col] = formatted_df[col].apply(lambda x: f"{x:,.2f}" if not pd.isnull(x) else "N/A")
         
         # Select only valid columns that exist
         valid_columns = [col for col in ["timestamp", "open", "high", "low", "close", "volume", "price_change"] 
