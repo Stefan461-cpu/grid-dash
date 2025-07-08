@@ -2,100 +2,68 @@ import numpy as np
 import pandas as pd
 
 def calculate_grid_lines(lower_price, upper_price, num_grids, grid_mode):
-    """Calculate grid price levels based on selected mode"""
     if grid_mode == "arithmetic":
         return np.linspace(lower_price, upper_price, num_grids + 1).tolist()
     else:  # geometric
-        ratio = (upper_price / lower_price) ** (1/num_grids)
+        ratio = (upper_price / lower_price) ** (1 / num_grids)
         return [lower_price * (ratio ** i) for i in range(num_grids + 1)]
 
-def simulate_grid_bot(df, total_investment, lower_price, upper_price, num_grids, 
+def simulate_grid_bot(df, total_investment, lower_price, upper_price, num_grids,
                       grid_mode, reserved_amount, fee_rate):
-    """Run grid bot simulation on historical data"""
-    # Initial setup
     if df.empty:
         return None
-        
+
     initial_price = df.iloc[0]['close']
     grid_lines = calculate_grid_lines(lower_price, upper_price, num_grids, grid_mode)
-    active_grids = set(range(len(grid_lines)))
+
     position = {"usdt": total_investment - reserved_amount, "coin": 0.0}
     fees_paid = 0.0
     trade_log = []
-    
-    # Calculate grid step amounts
+
     investment_per_grid = (total_investment - reserved_amount) / num_grids
-    coin_per_grid = investment_per_grid / initial_price
-    
-    for idx, row in df.iterrows():
-        current_price = row['close']
-        
-        # Skip first row as we don't have previous price
-        if idx == 0:
-            prev_price = current_price
-            continue
-        else:
-            prev_price = df.iloc[idx-1]['close']
-        
-        # Check which grid lines were crossed
-        grids_crossed = []
-        for i in active_grids:
-            grid_price = grid_lines[i]
-            
-            # Check if price crossed this grid line
-            if (prev_price < grid_price <= current_price) or (prev_price > grid_price >= current_price):
-                grids_crossed.append(i)
-        
-        # Process crossed grids in price order
-        if current_price > prev_price:  # Price rising
-            grids_crossed.sort()  # Process lowest first
-        else:  # Price falling
-            grids_crossed.sort(reverse=True)  # Process highest first
-        
-        for grid_index in grids_crossed:
-            grid_price = grid_lines[grid_index]
-            
-            if current_price >= grid_price:  # Sell territory
-                if position["coin"] >= coin_per_grid:
-                    # Execute sell
-                    trade_value = coin_per_grid * grid_price
+
+    for idx in range(1, len(df)):
+        prev_price = df.iloc[idx - 1]['close']
+        current_price = df.iloc[idx]['close']
+        timestamp = df.iloc[idx]['timestamp']
+
+        for grid_price in grid_lines:
+            if prev_price < grid_price <= current_price:
+                coin_to_sell = investment_per_grid / grid_price
+                if position["coin"] >= coin_to_sell:
+                    trade_value = coin_to_sell * grid_price
                     fee = trade_value * fee_rate
                     position["usdt"] += trade_value - fee
-                    position["coin"] -= coin_per_grid
+                    position["coin"] -= coin_to_sell
                     fees_paid += fee
                     trade_log.append({
-                        "timestamp": row['timestamp'],
+                        "timestamp": timestamp,
                         "type": "SELL",
                         "price": grid_price,
-                        "amount": coin_per_grid,
+                        "amount": coin_to_sell,
                         "fee": fee
                     })
-                    active_grids.remove(grid_index)
-            
-            else:  # Buy territory
+            elif prev_price > grid_price >= current_price:
                 if position["usdt"] >= investment_per_grid:
-                    # Execute buy
                     coins_bought = investment_per_grid / grid_price
                     fee = investment_per_grid * fee_rate
                     position["usdt"] -= investment_per_grid
                     position["coin"] += coins_bought
                     fees_paid += fee
                     trade_log.append({
-                        "timestamp": row['timestamp'],
+                        "timestamp": timestamp,
                         "type": "BUY",
                         "price": grid_price,
                         "amount": coins_bought,
                         "fee": fee
                     })
-                    active_grids.remove(grid_index)
-    
-    # Calculate final results
+
     final_usdt = position["usdt"]
     final_coin = position["coin"]
     final_value = final_usdt + final_coin * df.iloc[-1]['close']
     profit_usdt = final_value - total_investment
     profit_pct = (profit_usdt / total_investment) * 100
-    
+
     return {
         "initial_investment": total_investment,
         "final_value": final_value,
@@ -104,12 +72,12 @@ def simulate_grid_bot(df, total_investment, lower_price, upper_price, num_grids,
         "fees_paid": fees_paid,
         "grid_lines": grid_lines,
         "trade_log": trade_log,
-        "final_position": {
-            "usdt": final_usdt,
-            "coin": final_coin
-        },
+        "final_position": position,
         "num_trades": len(trade_log),
         "average_investment_per_grid": investment_per_grid,
         "num_grids": num_grids,
-        "reserved_amount": reserved_amount
+        "reserved_amount": reserved_amount,
+        "grid_mode": grid_mode,
+        "lower_price": lower_price,
+        "upper_price": upper_price
     }
