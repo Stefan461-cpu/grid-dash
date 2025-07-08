@@ -96,65 +96,93 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
         st.warning("⚠️ Keine Daten im ausgewählten Zeitraum verfügbar. Tipp: Verkürze den Zeitraum oder wähle ein kleineres Intervall.")
         st.stop()
     
-    # COMPLETELY NEW DATA PROCESSING APPROACH
+    # DEBUG: Show raw API response structure
+    with st.expander("🔍 API-Rohdaten anzeigen"):
+        st.write("Erster Eintrag:", candles[0] if candles else "Keine Daten")
+        st.write("Typ des ersten Eintrags:", type(candles[0]) if candles else "N/A")
+    
+    # ROBUST DATA PROCESSING - HANDLES BOTH LIST AND DICT FORMATS
     processed_data = []
-    valid_columns = ["timestamp", "open", "high", "low", "close", "volume"]
+    required_fields = ["timestamp", "open", "high", "low", "close", "volume"]
     
     for candle in candles:
-        # Skip candles that don't have enough elements
-        if len(candle) < 7:
-            continue
-            
-        # Convert each value with robust error handling
-        try:
-            # Timestamp conversion
-            ts = int(candle[0]) if candle[0] not in [None, "None", "null", "NaN", ""] else None
-            if ts is None:
+        # Handle list format
+        if isinstance(candle, list) and len(candle) >= 6:
+            try:
+                processed_data.append({
+                    "timestamp": candle[0],
+                    "open": candle[1],
+                    "high": candle[2],
+                    "low": candle[3],
+                    "close": candle[4],
+                    "volume": candle[5]
+                })
+            except (IndexError, TypeError):
                 continue
                 
-            # Price conversion
-            o = float(candle[1].replace(',', '.')) if candle[1] not in [None, "None", "null", "NaN", ""] else None
-            h = float(candle[2].replace(',', '.')) if candle[2] not in [None, "None", "null", "NaN", ""] else None
-            l = float(candle[3].replace(',', '.')) if candle[3] not in [None, "None", "null", "NaN", ""] else None
-            c = float(candle[4].replace(',', '.')) if candle[4] not in [None, "None", "null", "NaN", ""] else None
-            
-            # Volume conversion
-            v = float(candle[5].replace(',', '.')) if candle[5] not in [None, "None", "null", "NaN", ""] else None
-            
-            # Skip if essential data is missing
-            if None in [o, h, l, c]:
+        # Handle dictionary format
+        elif isinstance(candle, dict):
+            try:
+                # Extract required fields
+                item = {field: candle.get(field) for field in required_fields}
+                # Skip if any essential field is missing
+                if any(item[field] is None for field in required_fields):
+                    continue
+                processed_data.append(item)
+            except KeyError:
                 continue
                 
-            # Add to processed data
-            processed_data.append({
-                "timestamp": ts,
-                "open": o,
-                "high": h,
-                "low": l,
-                "close": c,
-                "volume": v if v is not None else 0
-            })
-        except (ValueError, TypeError):
+        # Skip unknown formats
+        else:
             continue
     
     # Check if we have any valid data
     if not processed_data:
-        st.error("⚠️ Keine gültigen Daten nach der Konvertierung verfügbar. Die API hat ungültige Werte zurückgegeben.")
+        st.error("⚠️ Keine gültigen Daten nach der Konvertierung verfügbar. Die API hat ein unerwartetes Format zurückgegeben.")
+        with st.expander("🔍 Erster API-Eintrag anzeigen"):
+            st.write(candles[0] if candles else "Keine Daten")
         st.stop()
         
     # Create DataFrame from processed data
     df = pd.DataFrame(processed_data)
     
-    # Convert timestamp to datetime
-    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
-    df["timestamp"] = df["timestamp"].dt.tz_convert(None)
+    # Convert data types
+    conversion_errors = []
+    try:
+        # Convert timestamp
+        df["timestamp"] = pd.to_numeric(df["timestamp"], errors="coerce")
+        df = df.dropna(subset=["timestamp"])
+        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True, errors="coerce")
+        df["timestamp"] = df["timestamp"].dt.tz_convert(None)
+        
+        # Convert price columns
+        for col in ["open", "high", "low", "close"]:
+            df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', '.'), errors="coerce")
+            
+        # Convert volume
+        df["volume"] = pd.to_numeric(df["volume"].astype(str).str.replace(',', '.'), errors="coerce")
+        
+    except Exception as e:
+        conversion_errors.append(str(e))
+    
+    # Remove any rows with invalid price data
+    df = df.dropna(subset=["open", "high", "low", "close"])
+    
+    # Show conversion errors if any
+    if conversion_errors:
+        st.warning(f"⚠️ Einige Daten konnten nicht konvertiert werden: {', '.join(conversion_errors)}")
+    
+    # Exit if no valid data remains
+    if df.empty:
+        st.error("⚠️ Keine gültigen Daten nach der Konvertierung verfügbar.")
+        st.stop()
     
     # Sort by timestamp
     df = df.sort_values("timestamp")
     
     # Calculate additional metrics
     df["price_change"] = df["close"].pct_change() * 100
-    df["range"] = (df["high"] - df["low"]) / df["low"] * 100
+    df["range"] = (df["high"] - df["low"]) / df["low"].replace(0, np.nan) * 100
     
     # Display data info
     st.success(f"✅ Erfolgreich {len(df)} Kerzen geladen")
