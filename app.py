@@ -3,7 +3,7 @@ from components.ui import get_user_settings, render_chart_and_metrics
 from services.bitget_api import fetch_bitget_candles
 
 st.set_page_config(page_title="Grid Bot Dashboard", layout="wide")
-st.title("\ud83d\udcc8 Grid Bot Dashboard – Live Bitget Daten")
+st.title("Grid Bot Dashboard – Live Bitget Daten")
 
 # Einstellungen abfragen
 settings = get_user_settings()
