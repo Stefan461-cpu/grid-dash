@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta, timezone
 import numpy as np
 
-st.set_page_config(page_title="Grid Bot Dashboard", layout="wide")
+st.set_page_config(page_title="Grrid Bot Dashboard", layout="wide")
 st.title("📈 Grid Bot Dashboard – Live Bitget Daten")
 
 # Seitenleiste für Einstellungen
