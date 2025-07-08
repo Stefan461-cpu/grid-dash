@@ -1,8 +1,7 @@
-# app.py
 import streamlit as st
-from components.ui import get_user_settings, render_chart_and_metrics, display_bot_results
+from components.ui import get_user_settings, render_chart_and_metrics, display_bot_results  # Fixed import
 from services.bitget_api import fetch_bitget_candles
-from services.bot import simulate_grid_bot  # New import
+from services.bot import simulate_grid_bot
 
 st.set_page_config(page_title="Grid Bot Dashboard", layout="wide")
 st.title("Grid Bot Dashboard – Live Bitget Daten")
