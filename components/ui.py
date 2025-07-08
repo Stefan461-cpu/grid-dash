@@ -1,40 +1,42 @@
+
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
 from datetime import date, timedelta
 
-def get_user_settings(default_lower=None, default_upper=None, key_prefix=""):
-    key_prefix = f"{key_prefix}__" if key_prefix else ""
-
+def get_user_settings():
     with st.sidebar:
-        st.header("Eeinstellungen")
-        coin = st.selectbox("Währung (COINUSDT)", ["BTC", "ETH", "SOL"], key=f"{key_prefix}select_coin")
-        interval = st.radio("Intervall", ["1m", "5m", "15m", "1h", "4h", "1d"], horizontal=True, index=3, key=f"{key_prefix}interval")
+        st.header("Einstellungen")
+        coin = st.selectbox("Währung (COINUSDT)", ["BTC", "ETH", "SOL"], key="coin")
+        interval = st.radio("Intervall", ["1m", "5m", "15m", "1h", "4h", "1d"], horizontal=True, index=3)
         today = date.today()
-        start_date = st.date_input("Startdatum", today - timedelta(days=30), key=f"{key_prefix}start")
-        end_date = st.date_input("Enddatum", today, key=f"{key_prefix}end")
-        max_bars = st.slider("Max. Kerzen (10–1000)", 10, 1000, 500, key=f"{key_prefix}maxbars")
-        chart_type = st.selectbox("Chart-Typ", ["Candlestick", "Linie"], index=0, key=f"{key_prefix}charttype")
-        show_volume = st.checkbox("Volumen anzeigen", True, key=f"{key_prefix}vol")
+        start_date = st.date_input("Startdatum", today - timedelta(days=30))
+        end_date = st.date_input("Enddatum", today)
+        max_bars = st.slider("Max. Kerzen (10–1000)", 10, 1000, 500)
+        chart_type = st.selectbox("Chart-Typ", ["Candlestick", "Linie"], index=0)
+        show_volume = st.checkbox("Volumen anzeigen", True)
 
         st.subheader("Grid Bot Parameter")
-        enable_bot = st.checkbox("Grid Bot aktivieren", True, key=f"{key_prefix}enablebot")
+        enable_bot = st.checkbox("Grid Bot aktivieren", True)
         bot_params = {}
         bot_run_triggered = False
 
         if enable_bot:
-            bot_params["total_investment"] = st.number_input("Gesamtinvestition (USDT)", 10.0, value=1000.0, step=100.0, key=f"{key_prefix}total")
+            default_lower = st.session_state.get("default_lower", 100.0)
+            default_upper = st.session_state.get("default_upper", 200.0)
+
+            bot_params["total_investment"] = st.number_input("Gesamtinvestition (USDT)", 10.0, value=1000.0, step=100.0)
             col1, col2 = st.columns(2)
             with col1:
-                bot_params["lower_price"] = st.number_input("Unterer Preis", 0.0001, value=default_lower or 100.0, format="%.4f", key=f"{key_prefix}lower")
+                bot_params["lower_price"] = st.number_input("Unterer Preis", 0.0001, value=default_lower, format="%.4f")
             with col2:
-                bot_params["upper_price"] = st.number_input("Oberer Preis", 0.0001, value=default_upper or 200.0, format="%.4f", key=f"{key_prefix}upper")
-            bot_params["num_grids"] = st.slider("Anzahl Grids", 2, 100, 20, key=f"{key_prefix}grids")
-            bot_params["grid_mode"] = st.radio("Grid Modus", ["arithmetic", "geometric"], index=0, key=f"{key_prefix}mode")
-            bot_params["reserved_amount"] = st.number_input("Reserviertes Kapital (USDT)", 0.0, value=100.0, step=10.0, key=f"{key_prefix}reserve")
-            bot_params["fee_rate"] = st.number_input("Gebühren (%)", 0.0, value=0.1, step=0.01, key=f"{key_prefix}fee") / 100.0
+                bot_params["upper_price"] = st.number_input("Oberer Preis", 0.0001, value=default_upper, format="%.4f")
+            bot_params["num_grids"] = st.slider("Anzahl Grids", 2, 100, 20)
+            bot_params["grid_mode"] = st.radio("Grid Modus", ["arithmetic", "geometric"], index=0)
+            bot_params["reserved_amount"] = st.number_input("Reserviertes Kapital (USDT)", 0.0, value=100.0, step=10.0)
+            bot_params["fee_rate"] = st.number_input("Gebühren (%)", 0.0, value=0.1, step=0.01) / 100.0
 
-            if st.button("Grid Bot starten", key=f"{key_prefix}startbtn"):
+            if st.button("Grid Bot starten"):
                 bot_run_triggered = True
 
     return {
@@ -49,7 +51,6 @@ def get_user_settings(default_lower=None, default_upper=None, key_prefix=""):
         "bot_params": bot_params,
         "bot_run_triggered": bot_run_triggered
     }
-
 
 def render_chart_and_metrics(df, symbol, interval, chart_type, show_volume, grid_lines=None):
     st.subheader(f"{symbol} {interval} Chart")
@@ -89,18 +90,6 @@ def render_chart_and_metrics(df, symbol, interval, chart_type, show_volume, grid
 
     st.plotly_chart(fig, use_container_width=True, key=f"{symbol}_{interval}")
 
-    if not df.empty:
-        latest = df.iloc[-1]
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Aktueller Preis", f"{latest['close']:.2f}")
-        col2.metric("Tageshöchst", f"{df['high'].max():.2f}")
-        col3.metric("Tagestief", f"{df['low'].min():.2f}")
-        col4.metric("Durchschnittsrange", f"{df['range'].mean():.2f}%")
-
-    with st.expander("Vollständige Kursdaten anzeigen"):
-        st.dataframe(df[["timestamp", "open", "high", "low", "close", "volume"]], use_container_width=True)
-
-
 def display_bot_results(results):
     st.subheader("Grid Bot Performance")
     col1, col2, col3, col4 = st.columns(4)
@@ -114,20 +103,3 @@ def display_bot_results(results):
     col6.metric("Durchschn. Invest/Grid", f"{results['average_investment_per_grid']:,.2f} USDT")
     col7.metric("Finales USDT", f"{results['final_position']['usdt']:,.2f}")
     col8.metric("Finale Coins", f"{results['final_position']['coin']:,.6f}")
-
-    st.write(f"**Endposition:** {results['final_position']['coin']:,.6f} Coins + "
-             f"{results['final_position']['usdt']:,.2f} USDT = {results['final_value']:,.2f} USDT")
-
-    with st.expander("Grid Konfiguration"):
-        st.write(f"**Grid Modus:** {results['grid_mode'].capitalize()}")
-        st.write(f"**Preisspanne:** {results['lower_price']:.4f} - {results['upper_price']:.4f}")
-        st.dataframe(pd.DataFrame({
-            "Grid Level": range(1, len(results['grid_lines']) + 1),
-            "Preis": results['grid_lines']
-        }), hide_index=True)
-
-    if results.get('trade_log'):
-        with st.expander(f"Handelsprotokoll ({len(results['trade_log'])} Trades)"):
-            trade_df = pd.DataFrame(results['trade_log'])
-            trade_df['timestamp'] = trade_df['timestamp'].dt.strftime('%Y-%m-%d %H:%M')
-            st.dataframe(trade_df, hide_index=True)
