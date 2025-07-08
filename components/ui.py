@@ -20,8 +20,8 @@ def get_user_settings():
         bot_params = {}
         if enable_bot:
             # Initialize with safe defaults
-            default_lower = 100
-            default_upper = 200
+            default_lower = 100.0
+            default_upper = 200.0
             
             bot_params["total_investment"] = st.number_input("Gesamtinvestition (USDT)", 
                                                            min_value=10.0, 
