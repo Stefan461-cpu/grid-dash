@@ -42,7 +42,6 @@ try:
         st.error("Bitte gültige Start- und Enddaten auswählen")
         st.stop()
     
-    # Use 00:00 UTC for start, and 23:59:59 for end
     start_dt = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
     end_dt = datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc) - timedelta(seconds=1)
     now = datetime.now(timezone.utc)
@@ -97,96 +96,75 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
         st.warning("⚠️ Keine Daten im ausgewählten Zeitraum verfügbar. Tipp: Verkürze den Zeitraum oder wähle ein kleineres Intervall.")
         st.stop()
     
-    # DEBUG: Show raw API response
-    with st.expander("🔍 API-Rohantwort anzeigen"):
-        st.json(data)
+    # COMPLETELY NEW DATA PROCESSING APPROACH
+    processed_data = []
+    valid_columns = ["timestamp", "open", "high", "low", "close", "volume"]
     
-    # Create DataFrame
-    df = pd.DataFrame(
-        candles,
-        columns=["timestamp", "open", "high", "low", "close", "volume", "quote_volume"]
-    )
-    
-    # DEBUG: Show raw data structure
-    with st.expander("🔍 Rohdatenstruktur anzeigen"):
-        st.write("Erste 5 Zeilen vor Konvertierung:")
-        st.dataframe(df.head())
-        st.write("Daten-Typen vor Konvertierung:")
-        st.write(df.dtypes)
-    
-    # FIXED DATA CONVERSION - COMPREHENSIVE HANDLING
-    # Custom conversion function with enhanced error handling
-    def safe_convert(value):
-        """Safely convert values to appropriate types"""
-        if value in [None, "None", "null", "NaN", ""]:
-            return np.nan
+    for candle in candles:
+        # Skip candles that don't have enough elements
+        if len(candle) < 7:
+            continue
             
-        if isinstance(value, str):
-            # Clean numeric strings
-            value = value.replace(',', '.')  # Handle European decimals
-            # Remove any non-numeric characters except decimal points and minus signs
-            value = ''.join(ch for ch in value if ch in '0123456789.-')
-            if value == '':
-                return np.nan
-                
+        # Convert each value with robust error handling
         try:
-            # Try converting to float first
-            return float(value)
+            # Timestamp conversion
+            ts = int(candle[0]) if candle[0] not in [None, "None", "null", "NaN", ""] else None
+            if ts is None:
+                continue
+                
+            # Price conversion
+            o = float(candle[1].replace(',', '.')) if candle[1] not in [None, "None", "null", "NaN", ""] else None
+            h = float(candle[2].replace(',', '.')) if candle[2] not in [None, "None", "null", "NaN", ""] else None
+            l = float(candle[3].replace(',', '.')) if candle[3] not in [None, "None", "null", "NaN", ""] else None
+            c = float(candle[4].replace(',', '.')) if candle[4] not in [None, "None", "null", "NaN", ""] else None
+            
+            # Volume conversion
+            v = float(candle[5].replace(',', '.')) if candle[5] not in [None, "None", "null", "NaN", ""] else None
+            
+            # Skip if essential data is missing
+            if None in [o, h, l, c]:
+                continue
+                
+            # Add to processed data
+            processed_data.append({
+                "timestamp": ts,
+                "open": o,
+                "high": h,
+                "low": l,
+                "close": c,
+                "volume": v if v is not None else 0
+            })
         except (ValueError, TypeError):
-            return np.nan
+            continue
     
-    # Process all columns with comprehensive error handling
-    try:
-        # Convert timestamp
-        df["timestamp"] = df["timestamp"].apply(safe_convert)
-        df = df.dropna(subset=["timestamp"])
-        df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True, errors="coerce")
-        df["timestamp"] = df["timestamp"].dt.tz_convert(None)
-        
-        # Convert price columns
-        price_cols = ["open", "high", "low", "close"]
-        for col in price_cols:
-            df[col] = df[col].apply(safe_convert)
-        
-        # Convert volume columns
-        volume_cols = ["volume", "quote_volume"]
-        for col in volume_cols:
-            df[col] = df[col].apply(safe_convert)
-        
-        # Remove any rows with all price data missing
-        df = df.dropna(subset=price_cols, how='all')
-        
-    except Exception as e:
-        st.error(f"Kritischer Fehler bei der Datenkonvertierung: {str(e)}")
-        with st.expander("🔍 Fehlerdetails anzeigen"):
-            st.write("Datenrahmen während des Fehlers:")
-            st.dataframe(df.head())
+    # Check if we have any valid data
+    if not processed_data:
+        st.error("⚠️ Keine gültigen Daten nach der Konvertierung verfügbar. Die API hat ungültige Werte zurückgegeben.")
         st.stop()
+        
+    # Create DataFrame from processed data
+    df = pd.DataFrame(processed_data)
     
-    # DEBUG: Show converted data
-    with st.expander("🔍 Konvertierte Daten anzeigen"):
-        st.write("Erste 5 Zeilen nach Konvertierung:")
-        st.dataframe(df.head())
-        st.write("Daten-Typen nach Konvertierung:")
-        st.write(df.dtypes)
-        if "close" in df.columns:
-            st.write(f"Min Close: {df['close'].min()}, Max Close: {df['close'].max()}")
+    # Convert timestamp to datetime
+    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
+    df["timestamp"] = df["timestamp"].dt.tz_convert(None)
     
-    # Exit if no valid data remains
-    if df.empty:
-        st.warning("⚠️ Keine gültigen Daten nach der Konvertierung verfügbar.")
-        st.stop()
+    # Sort by timestamp
+    df = df.sort_values("timestamp")
     
     # Calculate additional metrics
     df["price_change"] = df["close"].pct_change() * 100
-    df["range"] = (df["high"] - df["low"]) / df["low"].replace(0, np.nan) * 100
+    df["range"] = (df["high"] - df["low"]) / df["low"] * 100
+    
+    # Display data info
+    st.success(f"✅ Erfolgreich {len(df)} Kerzen geladen")
     
     st.subheader(f"📊 {symbol} {interval} Chart")
 
-    # Create figure with secondary y-axis for volume
+    # Create figure
     fig = go.Figure()
     
-    # Add main price chart based on selected type
+    # Add main price chart
     if chart_type == "Candlestick":
         fig.add_trace(go.Candlestick(
             x=df['timestamp'],
@@ -195,8 +173,8 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
             low=df['low'],
             close=df['close'],
             name='Preis',
-            increasing_line_color='#2ECC71',  # green
-            decreasing_line_color='#E74C3C'   # red
+            increasing_line_color='#2ECC71',
+            decreasing_line_color='#E74C3C'
         ))
     else:  # Linie
         fig.add_trace(go.Scatter(
@@ -208,7 +186,7 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
         ))
     
     # Add volume if enabled
-    if show_volume and not df['volume'].isnull().all():
+    if show_volume and 'volume' in df.columns and not df['volume'].isnull().all():
         fig.add_trace(go.Bar(
             x=df['timestamp'],
             y=df['volume'],
@@ -227,39 +205,21 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
         xaxis=dict(
             type='date',
             tickformat='%Y-%m-%d %H:%M',
-            rangeslider_visible=False,
-            tickmode='auto',
-            nticks=20
+            rangeslider_visible=False
         ),
         yaxis=dict(
-            autorange=True,
-            fixedrange=False
+            autorange=True
         ),
         yaxis2=dict(
-            title="Volumen" if show_volume and not df['volume'].isnull().all() else "",
+            title="Volumen" if show_volume else "",
             overlaying='y',
             side='right',
             showgrid=False,
-            visible=show_volume and not df['volume'].isnull().all()
+            visible=show_volume
         ),
         margin=dict(l=50, r=50, t=80, b=100),
         hovermode='x unified'
     )
-    
-    # Add annotations for key metrics
-    if not df.empty:
-        latest = df.iloc[-1]
-        fig.add_annotation(
-            x=latest['timestamp'],
-            y=latest['close'],
-            text=f"Letzter Preis: {latest['close']:.2f}",
-            showarrow=True,
-            arrowhead=1,
-            ax=-50,
-            ay=-40,
-            bgcolor="black",
-            bordercolor="white"
-        )
     
     st.plotly_chart(fig, use_container_width=True)
     
@@ -281,16 +241,7 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
     
     # Data table
     with st.expander("📄 Vollständige Daten anzeigen"):
-        # Format numbers properly
-        formatted_df = df.copy()
-        for col in ["open", "high", "low", "close", "volume", "quote_volume"]:
-            if col in formatted_df.columns:
-                formatted_df[col] = formatted_df[col].apply(lambda x: f"{x:,.2f}" if not pd.isnull(x) else "N/A")
-        
-        # Select only valid columns that exist
-        valid_columns = [col for col in ["timestamp", "open", "high", "low", "close", "volume", "price_change"] 
-                         if col in formatted_df.columns]
-        st.dataframe(formatted_df[valid_columns], use_container_width=True)
+        st.dataframe(df[["timestamp", "open", "high", "low", "close", "volume"]], use_container_width=True)
 else:
     st.error("❌ Ungültige API-Antwortstruktur")
     st.json(data)
