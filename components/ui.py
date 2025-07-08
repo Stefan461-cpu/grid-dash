@@ -19,14 +19,9 @@ def get_user_settings():
         enable_bot = st.checkbox("Grid Bot aktivieren", True)
         bot_params = {}
         if enable_bot:
-            # Get current price from data if available
-            try:
-                # Default values if no data
-                default_lower = 10000 * 0.7  # BTC example
-                default_upper = 10000 * 1.3
-            except:
-                default_lower = 100
-                default_upper = 200
+            # Initialize with safe defaults
+            default_lower = 100
+            default_upper = 200
             
             bot_params["total_investment"] = st.number_input("Gesamtinvestition (USDT)", 
                                                            min_value=10.0, 
@@ -128,7 +123,7 @@ def display_bot_results(results):
     """Display grid bot simulation results"""
     st.subheader("Grid Bot Performance")
     
-    # Key metrics
+    # Key metrics - Row 1
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Initialinvestition", f"{results['initial_investment']:,.2f} USDT")
     col2.metric("Endwert", f"{results['final_value']:,.2f} USDT", 
@@ -136,9 +131,16 @@ def display_bot_results(results):
     col3.metric("Gewinn/Verlust", f"{results['profit_usdt']:,.2f} USDT")
     col4.metric("Gebühren gesamt", f"{results['fees_paid']:,.4f} USDT")
     
+    # Key metrics - Row 2
+    col5, col6, col7, col8 = st.columns(4)
+    col5.metric("Anzahl Trades", results['num_trades'])
+    col6.metric("Durchschn. Invest/Grid", f"{results['average_investment_per_grid']:,.2f} USDT")
+    col7.metric("Finales USDT", f"{results['final_position']['usdt']:,.2f}")
+    col8.metric("Finale Coins", f"{results['final_position']['coin']:,.6f}")
+    
     # Position details
-    st.write(f"**Endposition:** {results['final_position']['coin']:,.4f} Coins + "
-             f"{results['final_position']['usdt']:,.2f} USDT")
+    st.write(f"**Endposition:** {results['final_position']['coin']:,.6f} Coins + "
+             f"{results['final_position']['usdt']:,.2f} USDT (Wert: {results['final_value']:,.2f} USDT)")
     
     # Grid details expander
     with st.expander("Grid Konfiguration"):
