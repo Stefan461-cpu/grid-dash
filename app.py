@@ -110,7 +110,19 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
         st.write("Daten-Typen vor Konvertierung:")
         st.write(df.dtypes)
     
-    # FIXED DATA CONVERSION WITH ROBUST ERROR HANDLING
+    # FIXED DATA CONVERSION - HANDLE EUROPEAN DECIMAL FORMATS
+    def convert_to_float(value):
+        """Convert string to float, handling both '.' and ',' decimal separators"""
+        if isinstance(value, str):
+            # Replace comma with dot for European decimal format
+            value = value.replace(',', '.')
+            # Remove any non-numeric characters except dots and minus signs
+            value = ''.join(ch for ch in value if ch in '0123456789.-')
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            return float('nan')
+    
     # Convert timestamp safely
     try:
         # Convert to numeric first with error handling
@@ -126,18 +138,19 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
         st.error(f"Fehler bei der Zeitstempelkonvertierung: {str(e)}")
         st.stop()
     
-    # Convert price columns to float with error handling
+    # Convert price columns to float with custom decimal handling
     price_cols = ["open", "high", "low", "close"]
     for col in price_cols:
         try:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
+            # Use our custom conversion function
+            df[col] = df[col].apply(convert_to_float)
         except Exception as e:
             st.error(f"Fehler bei der Konvertierung von {col}: {str(e)}")
             st.stop()
     
     # Convert volume to float
     try:
-        df["volume"] = pd.to_numeric(df["volume"], errors="coerce")
+        df["volume"] = df["volume"].apply(convert_to_float)
     except Exception as e:
         st.error(f"Fehler bei der Volumenkonvertierung: {str(e)}")
         st.stop()
@@ -262,10 +275,16 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
     
     # Data table
     with st.expander("📄 Vollständige Daten anzeigen"):
+        # Format numbers properly
+        formatted_df = df.copy()
+        for col in ["open", "high", "low", "close", "volume"]:
+            if col in formatted_df.columns:
+                formatted_df[col] = formatted_df[col].apply(lambda x: f"{x:,.2f}" if not pd.isnull(x) else "")
+        
         # Select only valid columns that exist
         valid_columns = [col for col in ["timestamp", "open", "high", "low", "close", "volume", "price_change"] 
-                         if col in df.columns]
-        st.dataframe(df[valid_columns], use_container_width=True)
+                         if col in formatted_df.columns]
+        st.dataframe(formatted_df[valid_columns], use_container_width=True)
 else:
     st.error("❌ Ungültige API-Antwortstruktur")
     st.json(data)
