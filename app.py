@@ -1,14 +1,16 @@
 import streamlit as st
-from components.ui import get_user_settings, render_chart_and_metrics, display_bot_results  # Fixed import
+from components.ui import get_user_settings, render_chart_and_metrics, display_bot_results
 from services.bitget_api import fetch_bitget_candles
 from services.bot import simulate_grid_bot
 
 st.set_page_config(page_title="Grid Bot Dashboard", layout="wide")
 st.title("Grid Bot Dashboard – Live Bitget Daten")
 
-# Initialize session state
+# Initialize session state for bot parameters
 if 'bot_results' not in st.session_state:
     st.session_state.bot_results = None
+if 'price_bounds_set' not in st.session_state:
+    st.session_state.price_bounds_set = False
 
 # Get user settings
 settings = get_user_settings()
@@ -28,17 +30,14 @@ elif df.empty:
     st.warning("Keine Daten verfügbar")
 else:
     st.success(f"Erfolgreich {len(df)} Kerzen geladen")
+    current_price = df.iloc[-1]['close']
     
-    # Update grid bot price defaults if needed
-    if settings["enable_bot"]:
-        current_price = df.iloc[-1]['close']
-        bot_params = settings["bot_params"]
-        
-        # Set default price bounds if not set
-        if bot_params.get("lower_price", 0) <= 0.0001:
-            bot_params["lower_price"] = current_price * 0.7
-        if bot_params.get("upper_price", 0) <= 0.0001:
-            bot_params["upper_price"] = current_price * 1.3
+    # Update grid bot price defaults
+    if settings["enable_bot"] and not st.session_state.price_bounds_set:
+        # Set default bounds to ±30% of current price
+        settings["bot_params"]["lower_price"] = current_price * 0.7
+        settings["bot_params"]["upper_price"] = current_price * 1.3
+        st.session_state.price_bounds_set = True
     
     # Run grid bot simulation if enabled
     grid_lines = None
