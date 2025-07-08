@@ -101,39 +101,33 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
         st.write("Erster Eintrag:", candles[0] if candles else "Keine Daten")
         st.write("Typ des ersten Eintrags:", type(candles[0]) if candles else "N/A")
     
-    # ROBUST DATA PROCESSING - HANDLES BOTH LIST AND DICT FORMATS
+    # PROCESS THE NEW DICTIONARY FORMAT
     processed_data = []
-    required_fields = ["timestamp", "open", "high", "low", "close", "volume"]
     
     for candle in candles:
-        # Handle list format
-        if isinstance(candle, list) and len(candle) >= 6:
-            try:
-                processed_data.append({
-                    "timestamp": candle[0],
-                    "open": candle[1],
-                    "high": candle[2],
-                    "low": candle[3],
-                    "close": candle[4],
-                    "volume": candle[5]
-                })
-            except (IndexError, TypeError):
+        try:
+            # Extract values from dictionary
+            ts = candle.get("ts")
+            o = candle.get("open")
+            h = candle.get("high")
+            l = candle.get("low")
+            c = candle.get("close")
+            v = candle.get("usdtVol") or candle.get("baseVol") or candle.get("quoteVol") or "0"
+            
+            # Skip if essential data is missing
+            if None in [ts, o, h, l, c]:
                 continue
                 
-        # Handle dictionary format
-        elif isinstance(candle, dict):
-            try:
-                # Extract required fields
-                item = {field: candle.get(field) for field in required_fields}
-                # Skip if any essential field is missing
-                if any(item[field] is None for field in required_fields):
-                    continue
-                processed_data.append(item)
-            except KeyError:
-                continue
-                
-        # Skip unknown formats
-        else:
+            # Add to processed data
+            processed_data.append({
+                "timestamp": ts,
+                "open": o,
+                "high": h,
+                "low": l,
+                "close": c,
+                "volume": v
+            })
+        except (KeyError, TypeError):
             continue
     
     # Check if we have any valid data
@@ -147,7 +141,6 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
     df = pd.DataFrame(processed_data)
     
     # Convert data types
-    conversion_errors = []
     try:
         # Convert timestamp
         df["timestamp"] = pd.to_numeric(df["timestamp"], errors="coerce")
@@ -163,14 +156,11 @@ if isinstance(data, dict) and isinstance(data.get("data"), list):
         df["volume"] = pd.to_numeric(df["volume"].astype(str).str.replace(',', '.'), errors="coerce")
         
     except Exception as e:
-        conversion_errors.append(str(e))
+        st.error(f"Datenkonvertierungsfehler: {str(e)}")
+        st.stop()
     
     # Remove any rows with invalid price data
     df = df.dropna(subset=["open", "high", "low", "close"])
-    
-    # Show conversion errors if any
-    if conversion_errors:
-        st.warning(f"⚠️ Einige Daten konnten nicht konvertiert werden: {', '.join(conversion_errors)}")
     
     # Exit if no valid data remains
     if df.empty:
