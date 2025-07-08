@@ -3,13 +3,13 @@ import plotly.graph_objects as go
 
 def get_user_settings():
     with st.sidebar:
-        st.header("\u2699\ufe0f Einstellungen")
+        st.header("Einstellungen")
         coin = st.selectbox("Währung (COINUSDT)", ["BTC", "ETH", "SOL"])
         interval = st.radio("Intervall", ["1m", "5m", "15m", "1h", "4h", "1d"], horizontal=True)
         start_date = st.date_input("Startdatum")
         end_date = st.date_input("Enddatum")
         max_bars = st.slider("Max. Kerzen (10–1000)", 10, 1000, 500)
-        st.subheader("\ud83d\udcca Chart-Optionen")
+        st.subheader("Chart-Optionen")
         chart_type = st.selectbox("Chart-Typ", ["Candlestick", "Linie"], index=0)
         show_volume = st.checkbox("Volumen anzeigen", True)
     return {
@@ -23,7 +23,7 @@ def get_user_settings():
     }
 
 def render_chart_and_metrics(df, symbol, interval, chart_type, show_volume):
-    st.subheader(f"\ud83d\udcca {symbol} {interval} Chart")
+    st.subheader(f"{symbol} {interval} Chart")
 
     fig = go.Figure()
     if chart_type == "Candlestick":
@@ -60,6 +60,6 @@ def render_chart_and_metrics(df, symbol, interval, chart_type, show_volume):
         col3.metric("Tagestief", f"{df['low'].min():.2f}")
         col4.metric("Durchschnittsbereich", f"{df['range'].mean():.2f}%")
 
-    with st.expander("\ud83d\udcc4 Vollständige Daten anzeigen"):
+    with st.expander("Vollständige Daten anzeigen"):
         st.dataframe(df[["timestamp", "open", "high", "low", "close", "volume"]], use_container_width=True)
 
