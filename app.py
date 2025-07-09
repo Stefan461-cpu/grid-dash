@@ -1,3 +1,4 @@
+# app.py – Version 1.1 – Stand: 2025-07-09 20:15
 import streamlit as st
 from datetime import date, timedelta
 from components.ui import get_user_settings, render_chart_and_metrics, display_bot_results
@@ -7,7 +8,6 @@ from services.bot import simulate_grid_bot
 # Seiteneinstellungen
 st.set_page_config(page_title="Live Grid Bot (Bitget)", layout="wide")
 st.title("📈 Live Grid Bot (Bitget)")
-
 
 # UI abrufen
 user_settings = get_user_settings()
@@ -44,7 +44,6 @@ if enable_bot and bot_run_triggered:
             upper_price=bot_params["upper_price"],
             num_grids=bot_params["num_grids"],
             grid_mode=bot_params["grid_mode"],
-            reserved_amount=bot_params["reserved_amount"],
             fee_rate=bot_params["fee_rate"]
         )
         if results:

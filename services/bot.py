@@ -1,3 +1,4 @@
+# bot.py – Version 1.5 – Stand: 2025-07-09 22:45
 import numpy as np
 import pandas as pd
 
@@ -9,17 +10,27 @@ def calculate_grid_lines(lower_price, upper_price, num_grids, grid_mode):
         return [lower_price * (ratio ** i) for i in range(num_grids + 1)]
 
 def simulate_grid_bot(df, total_investment, lower_price, upper_price, num_grids,
-                      grid_mode, reserved_amount, fee_rate):
+                      grid_mode, fee_rate):
     if df.empty:
         return None
 
     initial_price = df.iloc[0]['close']
+    reserved_amount = total_investment * 0.01  # 1 % USDT Reserve
     grid_lines = calculate_grid_lines(lower_price, upper_price, num_grids, grid_mode)
+
+    # Initialisiere Grid-Zustände
+    grid_state = {}
+    for price in grid_lines:
+        if price < initial_price:
+            grid_state[price] = {"active_side": "BUY", "last_trade": None}
+        elif price > initial_price:
+            grid_state[price] = {"active_side": "SELL", "last_trade": None}
+        else:
+            grid_state[price] = {"active_side": None, "last_trade": None}
 
     position = {"usdt": total_investment - reserved_amount, "coin": 0.0}
     fees_paid = 0.0
     trade_log = []
-
     investment_per_grid = (total_investment - reserved_amount) / num_grids
 
     for idx in range(1, len(df)):
@@ -27,8 +38,15 @@ def simulate_grid_bot(df, total_investment, lower_price, upper_price, num_grids,
         current_price = df.iloc[idx]['close']
         timestamp = df.iloc[idx]['timestamp']
 
-        for grid_price in grid_lines:
-            if prev_price < grid_price <= current_price:
+        # Richtung erkennen (für sinnvolle Grid-Sequenz)
+        grid_sequence = sorted(grid_lines) if current_price > prev_price else sorted(grid_lines, reverse=True)
+
+        for grid_price in grid_sequence:
+            state = grid_state[grid_price]
+            active_side = state["active_side"]
+
+            # SELL (nur wenn aktiv und korrekt von unten überquert)
+            if active_side == "SELL" and prev_price < grid_price <= current_price:
                 coin_to_sell = investment_per_grid / grid_price
                 if position["coin"] >= coin_to_sell:
                     trade_value = coin_to_sell * grid_price
@@ -43,9 +61,14 @@ def simulate_grid_bot(df, total_investment, lower_price, upper_price, num_grids,
                         "amount": coin_to_sell,
                         "fee": fee
                     })
-            elif prev_price > grid_price >= current_price:
+                    grid_state[grid_price]["active_side"] = None
+                    grid_state[grid_price]["last_trade"] = "SELL"
+
+            # BUY (nur wenn aktiv und korrekt von oben überquert)
+            elif active_side == "BUY" and prev_price > grid_price >= current_price:
                 if position["usdt"] >= investment_per_grid:
-                    coins_bought = investment_per_grid / grid_price
+                    amount_net = investment_per_grid * (1 - fee_rate)
+                    coins_bought = amount_net / grid_price
                     fee = investment_per_grid * fee_rate
                     position["usdt"] -= investment_per_grid
                     position["coin"] += coins_bought
@@ -57,6 +80,18 @@ def simulate_grid_bot(df, total_investment, lower_price, upper_price, num_grids,
                         "amount": coins_bought,
                         "fee": fee
                     })
+                    grid_state[grid_price]["active_side"] = None
+                    grid_state[grid_price]["last_trade"] = "BUY"
+
+            # Reaktivierung: Grid verlassen → neue Richtung erlauben
+            elif state["active_side"] is None:
+                last_trade = state["last_trade"]
+                # Preis oberhalb + letzter Trade BUY → neuer SELL möglich
+                if last_trade == "BUY" and current_price > grid_price and prev_price > grid_price:
+                    grid_state[grid_price]["active_side"] = "SELL"
+                # Preis unterhalb + letzter Trade SELL → neuer BUY möglich
+                elif last_trade == "SELL" and current_price < grid_price and prev_price < grid_price:
+                    grid_state[grid_price]["active_side"] = "BUY"
 
     final_usdt = position["usdt"]
     final_coin = position["coin"]
@@ -79,5 +114,6 @@ def simulate_grid_bot(df, total_investment, lower_price, upper_price, num_grids,
         "reserved_amount": reserved_amount,
         "grid_mode": grid_mode,
         "lower_price": lower_price,
-        "upper_price": upper_price
+        "upper_price": upper_price,
+        "bot_version": "bot.py v1.5 (2025-07-09 22:45)"
     }

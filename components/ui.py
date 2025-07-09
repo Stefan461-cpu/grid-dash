@@ -1,3 +1,4 @@
+# ui.py – Version 1.1 – Stand: 2025-07-09 20:15
 import streamlit as st
 import plotly.graph_objects as go
 import pandas as pd
@@ -6,7 +7,7 @@ from datetime import date, timedelta
 def get_user_settings():
     with st.sidebar:
         st.header("Einstellungen")
-        # coin = st.selectbox("Währung (COINUSDT)", ["BTC", "ETH", "SOL", "ADA"])
+        st.caption("ui.py – Version 1.1 – 2025-07-09 20:15")
         coin = st.text_input("Währung (COINUSDT)", value="BTC", placeholder="z. B. BTC oder ETH")
         interval = st.radio("Intervall", ["1m", "5m", "15m", "1h", "4h", "1d"], horizontal=True, index=3)
         today = date.today()
@@ -16,7 +17,6 @@ def get_user_settings():
         chart_type = st.selectbox("Chart-Typ", ["Candlestick", "Linie"], index=0)
         show_volume = st.checkbox("Volumen anzeigen", True)
 
-        # Grid Bot Settings
         st.subheader("Grid Bot Parameter")
         enable_bot = st.checkbox("Grid Bot aktivieren", True)
         bot_params = {}
@@ -29,23 +29,31 @@ def get_user_settings():
             else:
                 default_price = 100.0
 
-            # default_lower = round(default_price * 0.7, 4)
-            # default_upper = round(default_price * 1.3, 4)
-            default_lower = round(default_price * 0.001 , 4)
-            default_upper = round(default_price * 0.001 , 4)
+            default_lower = round(default_price * 0.7, 4)
+            default_upper = round(default_price * 1.3, 4)
 
             bot_params["total_investment"] = st.number_input("Gesamtinvestition (USDT)", 10.0, value=10000.0, step=100.0)
             col1, col2 = st.columns(2)
             with col1:
-                # bot_params["lower_price"] = st.number_input("Unterer Preis", 0.0001, value=default_upper, format="%.2f")
-                bot_params["lower_price"] = st.number_input("Unterer Preis", 0.0001, format="%.2f")
+                bot_params["lower_price"] = st.number_input("Unterer Preis", 0.0001, value=default_lower, format="%.4f")
             with col2:
-                # bot_params["upper_price"] = st.number_input("Oberer Preis", 0.0001, value=default_upper, format="%.2f")
-                bot_params["upper_price"] = st.number_input("Oberer Preis", 0.0001, format="%.2f")
+                bot_params["upper_price"] = st.number_input("Oberer Preis", 0.0001, value=default_upper, format="%.4f")
+
             bot_params["num_grids"] = st.slider("Anzahl Grids", 2, 100, 20)
             bot_params["grid_mode"] = st.radio("Grid Modus", ["arithmetic", "geometric"], index=0)
-            bot_params["reserved_amount"] = st.number_input("Reserviertes Kapital (USDT)", 0.0, value=100.0, step=10.0)
             bot_params["fee_rate"] = st.number_input("Gebühren (%)", 0.0, value=0.1, step=0.01) / 100.0
+
+            # Anzeige der fixen Reserve (1 % USDT, 2 % Coin)
+            reserve_usdt = bot_params["total_investment"] * 0.01
+            st.markdown(f"**Reservierte Gebühren (USDT)**: {reserve_usdt:.2f} USDT")
+            bot_params["reserved_amount"] = reserve_usdt  # automatisch gesetzt
+
+            if st.session_state.get("df") is not None and not st.session_state["df"].empty:
+                close_price = st.session_state["df"].iloc[0]["close"]
+                reserve_coin = (bot_params["total_investment"] * 0.02) / close_price
+                st.markdown(f"**Reservierte Gebühren (Coin)**: {reserve_coin:.4f} {coin}")
+            else:
+                st.markdown("**Reservierte Gebühren (Coin)**: wird berechnet, sobald Daten geladen sind")
 
             if st.button("Grid Bot starten"):
                 bot_run_triggered = True
@@ -89,8 +97,7 @@ def render_chart_and_metrics(df, symbol, interval, chart_type, show_volume, grid
     fig.update_layout(
         height=600,
         title=f"{symbol} {interval} Chart",
-        yaxis_title="Preis (USsDT)",
-        # yaxis2_title="Volumen",
+        yaxis_title="Preis (USDT)",
         xaxis_title="Zeit",
         template="plotly_dark",
         xaxis=dict(type='date', tickformat='%d.%m', rangeslider_visible=False),
@@ -107,7 +114,6 @@ def render_chart_and_metrics(df, symbol, interval, chart_type, show_volume, grid
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("Aktueller Preis", f"{latest['close']:,.2f}", f"{df['price_change'].iloc[-1]:,.2f}%")
         col2.metric("Tageshöchst", f"{df['high'].max():,.2f}")
-        # col3.metric("Tagestief", f"{df['low'].min():.2f}")
         col3.metric("Tagestief", f"{df['low'].min():,.2f}")
         col4.metric("Durchschnittsrange", f"{df['range'].mean():,.2f}%")
 
