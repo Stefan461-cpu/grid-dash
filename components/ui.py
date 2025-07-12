@@ -29,8 +29,10 @@ def get_user_settings():
             else:
                 default_price = 100.0
 
-            default_lower = round(default_price * 0.7, 4)
-            default_upper = round(default_price * 1.3, 4)
+            # Manuelle Festlegung der Grid-Grenzen
+            default_lower = 100000.0
+            default_upper = 120000.0
+
 
             bot_params["total_investment"] = st.number_input("Gesamtinvestition (USDT)", 10.0, value=10000.0, step=100.0)
             col1, col2 = st.columns(2)
