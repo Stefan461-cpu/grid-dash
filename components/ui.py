@@ -1,16 +1,15 @@
-# components/ui.py - Corrected Version
+# components/ui.py
 import streamlit as st
 import pandas as pd
 from datetime import date, timedelta, datetime
 import plotly.graph_objects as go
+import numpy as np
 
 def get_user_settings():
     with st.sidebar:
         st.header("Einstellungen")
         jetzt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        st.caption(f"ui.py – Version 10 – Stand: {jetzt}")
-
-        # st.caption("ui.py – Version 10 – 2025-07-15")
+        st.caption(f"ui.py – Version 12 – Stand: {jetzt}")
         
         # Simulation toggle
         use_simulated = st.checkbox("Use Simulated Data", False, key="sim_toggle")
@@ -18,7 +17,8 @@ def get_user_settings():
         if use_simulated:
             st.subheader("Simulation Parameters")
             pattern = st.selectbox("Price Pattern", 
-                                  ["linear_up", "linear_down", "sine", "range_bound", "breakout", "volatile"],
+                                  ["linear_up", "linear_down", "sine", "range_bound", 
+                                   "breakout", "volatile", "mean_reverting"],
                                   index=0,
                                   key="sim_pattern")
             init_price = st.number_input("Initial Price (USDT)", 
@@ -41,6 +41,7 @@ def get_user_settings():
         st.subheader("Chart Settings")
         chart_type = st.selectbox("Chart-Typ", ["Candlestick", "Linie"], index=0)
         show_volume = st.checkbox("Volumen anzeigen", True)
+        show_grid_lines = st.checkbox("Grid-Linien anzeigen", False)  # NEW: Grid toggle
         
         # Grid bot settings
         st.subheader("Grid Bot Parameter")
@@ -93,6 +94,7 @@ def get_user_settings():
             "simulation_volatility": volatility,
             "chart_type": chart_type,
             "show_volume": show_volume,
+            "show_grid_lines": show_grid_lines,  # NEW: Grid toggle state
             "enable_bot": enable_bot,
             "bot_params": bot_params,
             "bot_run_triggered": bot_run_triggered
@@ -106,12 +108,14 @@ def get_user_settings():
             "max_bars": max_bars,
             "chart_type": chart_type,
             "show_volume": show_volume,
+            "show_grid_lines": show_grid_lines,  # NEW: Grid toggle state
             "enable_bot": enable_bot,
             "bot_params": bot_params,
             "bot_run_triggered": bot_run_triggered
         }
 
-def render_chart_and_metrics(df, symbol, interval, chart_type, show_volume, grid_lines=None, trade_log=None):
+def render_chart_and_metrics(df, symbol, interval, chart_type, show_volume, 
+                           grid_lines=None, trade_log=None, show_grid_lines=False):  # NEW: show_grid_lines param
     if df.empty:
         st.warning("Keine Daten zum Anzeigen des Charts.")
         return
@@ -150,8 +154,8 @@ def render_chart_and_metrics(df, symbol, interval, chart_type, show_volume, grid
             yaxis='y2'
         ))
     
-    # Add grid lines if provided
-    if grid_lines and not df.empty:
+    # Add grid lines if provided AND enabled
+    if show_grid_lines and grid_lines and not df.empty:  # NEW: check show_grid_lines
         for price in grid_lines:
             if df['low'].min() <= price <= df['high'].max():
                 fig.add_hline(
@@ -216,34 +220,6 @@ def render_chart_and_metrics(df, symbol, interval, chart_type, show_volume, grid
     with st.expander("Vollständige Kursdaten anzeigen"):
         st.dataframe(df[["timestamp", "open", "high", "low", "close", "volume"]], use_container_width=True)
 
-# def display_bot_results(results, df=None):
-#     if not results:
-#         return
-        
-#     st.subheader("Grid Bot Performance")
-#     col1, col2, col3, col4 = st.columns(4)
-#     col1.metric("Initialinvestition", f"{results['initial_investment']:,.2f} USDT")
-#     col2.metric("Endwert", f"{results['final_value']:,.2f} USDT", f"{results['profit_pct']:.2f}%")
-#     col3.metric("Gewinn/Verlust", f"{results['profit_usdt']:,.2f} USDT")
-#     col4.metric("Gebühren gesamt", f"{results['fees_paid']:,.4f} USDT")
-
-#     col5, col6, col7, col8 = st.columns(4)
-#     col5.metric("Anzahl Trades", results['num_trades'])
-#     col6.metric("Durchschn. Invest/Grid", f"{results['average_investment_per_grid']:,.2f} USDT")
-#     col7.metric("Finales USDT", f"{results['final_position']['usdt']:,.2f}")
-#     col8.metric("Finale Coins", f"{results['final_position']['coin']:,.6f}")
-
-#     st.write(f"**Endposition:** {results['final_position']['coin']:,.6f} Coins + "
-#              f"{results['final_position']['usdt']:,.2f} USDT = {results['final_value']:,.2f} USDT")
-
-#     with st.expander("Grid Konfiguration"):
-#         st.write(f"**Grid Modus:** {results['grid_mode'].capitalize()}")
-#         st.write(f"**Preisspanne:** {results['lower_price']:.4f} - {results['upper_price']:.4f}")
-#         st.dataframe(pd.DataFrame({
-#             "Grid Level": range(1, len(results['grid_lines']) + 1),
-#             "Preis": results['grid_lines']
-#         }), hide_index=True)
-
 def display_bot_results(results, df=None):
     if not results:
         st.warning("No simulation results available")
@@ -273,7 +249,7 @@ def display_bot_results(results, df=None):
     col7.metric("Final USDT", f"{results.get('final_position', {}).get('usdt', 0):,.2f}")
     col8.metric("Final Coins", f"{results.get('final_position', {}).get('coin', 0):,.6f}")
 
-    # Price Information Section - UPDATED
+    # Price Information Section
     st.write("---")
     price_info = [
         ("Initial Price", results.get('initial_price', df.iloc[0]['close'] if df is not None else 'N/A')),
@@ -329,12 +305,13 @@ def display_bot_results(results, df=None):
                              "price": st.column_config.NumberColumn("Price", format="%.4f"),
                              "amount": st.column_config.NumberColumn("Amount", format="%.8f"),
                              "fee": st.column_config.NumberColumn("Fee", format="%.4f"),
-                             "profit": st.column_config.NumberColumn("Profit", format="%.2f")
+                             "profit": st.column_config.NumberColumn("Profit", format="%.2f"),
+                             "queue_size": "Inventory Slots"
                          })
 
     # Simulation Verification
     if df is not None and not df.empty:
-        st.subheader("Simulation Verification")
+        st.subheader("Performance Comparison")
         
         # Calculate metrics
         initial = results.get('initial_price', df.iloc[0]['close'])
@@ -346,8 +323,42 @@ def display_bot_results(results, df=None):
         # Display metrics
         col1, col2, col3 = st.columns(3)
         col1.metric("Buy & Hold Return", f"{buy_hold_return:.2f}%")
-        col2.metric("Bot Return", f"{bot_return:.2f}%", f"{(bot_return - buy_hold_return):.2f}%")
+        col2.metric("Bot Return", f"{bot_return:.2f}%", 
+                   f"{(bot_return - buy_hold_return):.2f}%", 
+                   delta_color="inverse" if (bot_return - buy_hold_return) < 0 else "normal")
         col3.metric("Fee Impact", f"{fee_ratio:.2f}%")
+        
+        # Visual comparison
+        st.write("---")
+        st.subheader("Return Comparison")
+        fig = go.Figure()
+        fig.add_trace(go.Indicator(
+            mode="number+gauge", 
+            value=bot_return,
+            title={"text": "Bot Return"},
+            domain={'x': [0.25, 0.5], 'y': [0.7, 1]},
+            gauge={
+                'shape': "bullet",
+                'axis': {'range': [min(bot_return, buy_hold_return)-5, max(bot_return, buy_hold_return)+5]},
+                'bar': {'color': "darkblue"}
+            }
+        ))
+        fig.add_trace(go.Indicator(
+            mode="number+gauge", 
+            value=buy_hold_return,
+            title={"text": "Buy & Hold"},
+            domain={'x': [0.5, 0.75], 'y': [0.7, 1]},
+            gauge={
+                'shape': "bullet",
+                'axis': {'range': [min(bot_return, buy_hold_return)-5, max(bot_return, buy_hold_return)+5]},
+                'bar': {'color': "darkgreen"}
+            }
+        ))
+        fig.update_layout(
+            height=200,
+            margin=dict(t=30, b=10)
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
     # Debug Information
     if 'debug' in results:
@@ -460,6 +471,31 @@ def plot_simulation_pattern(df, pattern):
                 text="✅ Bot should capture large price swings",
                 showarrow=False, font=dict(size=14))
             ])
+            
+    elif pattern == 'mean_reverting':
+        # Add mean line
+        mean_price = df['close'].mean()
+        fig.add_hline(y=mean_price, line_dash="dash", line_color="purple", 
+                     annotation_text="Mean Price", annotation_position="right")
+        
+        # Add reversion arrows
+        for i in range(1, len(df)-1, 5):
+            if abs(df['close'].iloc[i] - mean_price) > 0.1 * mean_price:
+                fig.add_annotation(
+                    x=df['timestamp'].iloc[i],
+                    y=df['close'].iloc[i],
+                    text="↕️",
+                    showarrow=False,
+                    font=dict(size=20)
+                )
+        
+        fig.update_layout(
+            title=title,
+            annotations=[dict(
+                x=0.5, y=0.9, xref="paper", yref="paper",
+                text="✅ Bot should profit from price oscillations around mean",
+                showarrow=False, font=dict(size=14))
+            ])
     
     else:  # Default case
         fig.update_layout(title=title)
@@ -472,12 +508,5 @@ def plot_simulation_pattern(df, pattern):
         yaxis_title="Price",
         margin=dict(l=50, r=50, t=80, b=50)
     )
-    
-    # # In display_bot_results()
-    # if "debug" in results:
-    #     with st.expander("Debug Info"):
-    #         st.write("Buy Prices:", results["debug"]["buy_prices"])
-    #         st.write("Coin Amounts:", results["debug"]["coin_amounts"])
-    #         st.write(f"Initial/Final Price: {results['debug']['initial_price']} → {results['debug']['final_price']}")   
     
     st.plotly_chart(fig, use_container_width=True)

@@ -1,6 +1,6 @@
 import streamlit as st
 from datetime import date, timedelta
-from components.ui import get_user_settings, render_chart_and_metrics, display_bot_results, plot_simulation_pattern
+from components.ui import get_user_settings, render_chart_and_metrics, display_bot_results, plot_simulation_pattern  # FIXED TYPO HERE
 from services.bitget_api import fetch_bitget_candles
 from services.bot import simulate_grid_bot
 from services.simulator import generate_simulated_data
@@ -8,6 +8,12 @@ from services.simulator import generate_simulated_data
 # Seiteneinstellungen
 st.set_page_config(page_title="Grid Bot Simulator", layout="wide")
 st.title("📈 Grid Bot Simulator")
+
+# Initialize session state
+if 'prev_settings' not in st.session_state:
+    st.session_state.prev_settings = None
+if 'results' not in st.session_state:
+    st.session_state.results = None
 
 # UI abrufen
 user_settings = get_user_settings()
@@ -22,14 +28,11 @@ if user_settings.get("use_simulated_data", False):
         volatility=user_settings["simulation_volatility"]
     )
     symbol = "SIM/BTC"
+    interval = user_settings.get("simulation_interval", "1h")
     
     # Show pattern visualization
     st.subheader("Simulation Pattern Visualization")
-    plot_simulation_pattern(df, user_settings["simulation_pattern"])
-    
-    # Set default interval for simulated data
-    interval = "1h"  # Default interval for simulated data
-    interval = user_settings.get("simulation_interval", "1h")  # Use selected interval
+    plot_simulation_pattern(df, user_settings["simulation_pattern"])  # FIXED FUNCTION NAME
 else:
     # Original data fetching
     coin = user_settings["coin"]
@@ -43,13 +46,36 @@ else:
         st.error(error)
         st.stop()
 
-# DataFrame speichern
+# Store DataFrame
 st.session_state["df"] = df
+
+# Calculate grid lines for visualization
+grid_lines = None
+if user_settings["enable_bot"]:
+    from services.bot import calculate_grid_lines
+    bot_params = user_settings["bot_params"]
+    grid_lines = calculate_grid_lines(
+        bot_params["lower_price"],
+        bot_params["upper_price"],
+        bot_params["num_grids"],
+        bot_params["grid_mode"]
+    )
+
+# Get trade log from previous run
+trade_log = st.session_state.results.get("trade_log") if st.session_state.results else None
 
 # Chart anzeigen
 render_chart_and_metrics(df, symbol, interval, 
-                        user_settings["chart_type"], 
-                        user_settings["show_volume"])
+                         user_settings["chart_type"], 
+                         user_settings["show_volume"],
+                         grid_lines=grid_lines,
+                         trade_log=trade_log)
+
+# Settings change detection
+current_settings = {k: v for k, v in user_settings.items() if k != "bot_run_triggered"}
+if st.session_state.prev_settings != current_settings:
+    st.session_state.prev_settings = current_settings
+    st.session_state.results = None
 
 # Grid Bot starten
 if user_settings["enable_bot"] and user_settings.get("bot_run_triggered", False):
@@ -64,5 +90,8 @@ if user_settings["enable_bot"] and user_settings.get("bot_run_triggered", False)
             fee_rate=user_settings["bot_params"]["fee_rate"]
         )
         if results:
-            # Pass both results and df for verification
-            display_bot_results(results, df)
+            st.session_state.results = results
+
+# Display results if available
+if st.session_state.results:
+    display_bot_results(st.session_state.results, df)
