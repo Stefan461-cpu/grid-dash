@@ -341,6 +341,12 @@ def display_bot_results(results, df=None):
         col2.metric("Bot Return", f"{bot_return:.2f}%", f"{(bot_return - buy_hold_return):.2f}%")
         col3.metric("Fee Impact", f"{fee_ratio:.2f}%")
 
+    # In display_bot_results()
+    # Unbekannte Variable avg_cost_basis; keine Ahnung, wo die herkommt, daher auskommentiert
+    # st.metric("Avg Cost Basis", 
+    #      f"{results['avg_cost_basis']:,.2f} USDT",
+    #      f"{(final_price - results['avg_cost_basis'])/results['avg_cost_basis']*100:.2f}%")
+
 def plot_simulation_pattern(df, pattern):
     """Generate explanation visualization for each pattern"""
     fig = go.Figure()
