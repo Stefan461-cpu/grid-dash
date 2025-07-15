@@ -1,101 +1,190 @@
-# ui.py – Version 1.1 – Stand: 2025-07-09 20:15
+# components/ui.py - Corrected Version
 import streamlit as st
-import plotly.graph_objects as go
 import pandas as pd
 from datetime import date, timedelta
+import plotly.graph_objects as go
 
 def get_user_settings():
     with st.sidebar:
         st.header("Einstellungen")
-        st.caption("ui.py – Version 1.1 – 2025-07-09 20:15")
-        coin = st.text_input("Währung (COINUSDT)", value="BTC", placeholder="z. B. BTC oder ETH")
-        interval = st.radio("Intervall", ["1m", "5m", "15m", "1h", "4h", "1d"], horizontal=True, index=3)
-        today = date.today()
-        start_date = st.date_input("Startdatum", today - timedelta(days=30))
-        end_date = st.date_input("Enddatum", today)
-        max_bars = st.slider("Max. Kerzen (10–1000)", 10, 1000, 500)
+        st.caption("ui.py – Version 2.1 – 2025-07-12")
+        
+        # Simulation toggle
+        use_simulated = st.checkbox("Use Simulated Data", False, key="sim_toggle")
+        
+        if use_simulated:
+            st.subheader("Simulation Parameters")
+            pattern = st.selectbox("Price Pattern", 
+                                  ["linear_up", "linear_down", "sine", "range_bound", "breakout", "volatile"],
+                                  index=0,
+                                  key="sim_pattern")
+            init_price = st.number_input("Initial Price (USDT)", 
+                                        value=100000.0, 
+                                        step=1000.0,
+                                        key="sim_init_price")
+            sim_days = st.slider("Simulation Days", 1, 30, 7, key="sim_days")
+            volatility = st.slider("Volatility", 1000, 20000, 5000, key="sim_vol")
+        else:
+            # Original market data inputs
+            st.subheader("Market Data")
+            coin = st.text_input("Währung (COINUSDT)", value="BTC", placeholder="z. B. BTC oder ETH")
+            interval = st.radio("Intervall", ["1m", "5m", "15m", "1h", "4h", "1d"], horizontal=True, index=3)
+            today = date.today()
+            start_date = st.date_input("Startdatum", today - timedelta(days=30))
+            end_date = st.date_input("Enddatum", today)
+            max_bars = st.slider("Max. Kerzen (10–1000)", 10, 1000, 500)
+
+        # Common settings (both simulated and real data)
+        st.subheader("Chart Settings")
         chart_type = st.selectbox("Chart-Typ", ["Candlestick", "Linie"], index=0)
         show_volume = st.checkbox("Volumen anzeigen", True)
-
+        
+        # Grid bot settings
         st.subheader("Grid Bot Parameter")
         enable_bot = st.checkbox("Grid Bot aktivieren", True)
         bot_params = {}
         bot_run_triggered = False
 
         if enable_bot:
+            # Default price setup
             default_price = None
             if "df" in st.session_state and not st.session_state["df"].empty:
                 default_price = st.session_state["df"].iloc[0]["close"]
             else:
-                default_price = 100.0
-
-            # Manuelle Festlegung der Grid-Grenzen
-            default_lower = 100000.0
-            default_upper = 120000.0
-
+                default_price = 100000.0
 
             bot_params["total_investment"] = st.number_input("Gesamtinvestition (USDT)", 10.0, value=10000.0, step=100.0)
+            
             col1, col2 = st.columns(2)
             with col1:
-                bot_params["lower_price"] = st.number_input("Unterer Preis", 0.0001, value=default_lower, format="%.4f")
+                bot_params["lower_price"] = st.number_input("Unterer Preis", 0.0001, value=default_price*0.8, format="%.4f")
             with col2:
-                bot_params["upper_price"] = st.number_input("Oberer Preis", 0.0001, value=default_upper, format="%.4f")
+                bot_params["upper_price"] = st.number_input("Oberer Preis", 0.0001, value=default_price*1.2, format="%.4f")
 
             bot_params["num_grids"] = st.slider("Anzahl Grids", 2, 100, 20)
             bot_params["grid_mode"] = st.radio("Grid Modus", ["arithmetic", "geometric"], index=0)
             bot_params["fee_rate"] = st.number_input("Gebühren (%)", 0.0, value=0.1, step=0.01) / 100.0
 
-            # Anzeige der fixen Reserve (1 % USDT, 2 % Coin)
+            # Show fee reserves
             reserve_usdt = bot_params["total_investment"] * 0.01
             st.markdown(f"**Reservierte Gebühren (USDT)**: {reserve_usdt:.2f} USDT")
-            bot_params["reserved_amount"] = reserve_usdt  # automatisch gesetzt
-
+            
+            coin_display_name = "BTC" if use_simulated else coin
             if st.session_state.get("df") is not None and not st.session_state["df"].empty:
                 close_price = st.session_state["df"].iloc[0]["close"]
                 reserve_coin = (bot_params["total_investment"] * 0.02) / close_price
-                st.markdown(f"**Reservierte Gebühren (Coin)**: {reserve_coin:.4f} {coin}")
+                st.markdown(f"**Reservierte Gebühren (Coin)**: {reserve_coin:.4f} {coin_display_name}")
             else:
                 st.markdown("**Reservierte Gebühren (Coin)**: wird berechnet, sobald Daten geladen sind")
 
             if st.button("Grid Bot starten"):
                 bot_run_triggered = True
 
-    return {
-        "coin": coin,
-        "interval": interval,
-        "start_date": start_date,
-        "end_date": end_date,
-        "max_bars": max_bars,
-        "chart_type": chart_type,
-        "show_volume": show_volume,
-        "enable_bot": enable_bot,
-        "bot_params": bot_params,
-        "bot_run_triggered": bot_run_triggered
-    }
+    # Return settings based on mode
+    if use_simulated:
+        return {
+            "use_simulated_data": True,
+            "simulation_pattern": pattern,
+            "simulation_initial_price": init_price,
+            "simulation_days": sim_days,
+            "simulation_volatility": volatility,
+            "chart_type": chart_type,
+            "show_volume": show_volume,
+            "enable_bot": enable_bot,
+            "bot_params": bot_params,
+            "bot_run_triggered": bot_run_triggered
+        }
+    else:
+        return {
+            "coin": coin,
+            "interval": interval,
+            "start_date": start_date,
+            "end_date": end_date,
+            "max_bars": max_bars,
+            "chart_type": chart_type,
+            "show_volume": show_volume,
+            "enable_bot": enable_bot,
+            "bot_params": bot_params,
+            "bot_run_triggered": bot_run_triggered
+        }
 
-def render_chart_and_metrics(df, symbol, interval, chart_type, show_volume, grid_lines=None):
+def render_chart_and_metrics(df, symbol, interval, chart_type, show_volume, grid_lines=None, trade_log=None):
+    if df.empty:
+        st.warning("Keine Daten zum Anzeigen des Charts.")
+        return
+        
     st.subheader(f"{symbol} {interval} Chart")
     fig = go.Figure()
+    
+    # Plot main chart
     if chart_type == "Candlestick":
         fig.add_trace(go.Candlestick(
-            x=df['timestamp'], open=df['open'], high=df['high'], low=df['low'], close=df['close'],
-            increasing_line_color='#2ECC71', decreasing_line_color='#E74C3C', name='Preis'))
+            x=df['timestamp'], 
+            open=df['open'], 
+            high=df['high'], 
+            low=df['low'], 
+            close=df['close'],
+            increasing_line_color='#2ECC71', 
+            decreasing_line_color='#E74C3C', 
+            name='Preis'
+        ))
     else:
-        fig.add_trace(go.Scatter(x=df['timestamp'], y=df['close'], mode='lines', name='Schlusskurs',
-                                 line=dict(color='#3498DB', width=2)))
-
+        fig.add_trace(go.Scatter(
+            x=df['timestamp'], 
+            y=df['close'], 
+            mode='lines', 
+            name='Schlusskurs',
+            line=dict(color='#3498DB', width=2)
+        ))
+    
+    # Add volume if enabled
     if show_volume and 'volume' in df.columns:
-        fig.add_trace(go.Bar(x=df['timestamp'], y=df['volume'], name='Volumen', marker_color='#7F8C8D', yaxis='y2'))
-
+        fig.add_trace(go.Bar(
+            x=df['timestamp'], 
+            y=df['volume'], 
+            name='Volumen', 
+            marker_color='#7F8C8D', 
+            yaxis='y2'
+        ))
+    
+    # Add grid lines if provided
     if grid_lines and not df.empty:
         for price in grid_lines:
             if df['low'].min() <= price <= df['high'].max():
-                fig.add_hline(y=price, line_dash="dot", line_width=1,
-                              line_color="rgba(125,125,125,0.5)",
-                              annotation_text=f"{price:.4f}",
-                              annotation_position="right",
-                              annotation_font_size=10)
-
+                fig.add_hline(
+                    y=price, 
+                    line_dash="dot", 
+                    line_width=1,
+                    line_color="rgba(125,125,125,0.5)",
+                    annotation_text=f"{price:.4f}",
+                    annotation_position="right",
+                    annotation_font_size=10
+                )
+    
+    # Add trade markers if trade log exists
+    if trade_log and not df.empty:
+        trades_df = pd.DataFrame(trade_log)
+        buy_trades = trades_df[trades_df['type'] == 'BUY']
+        sell_trades = trades_df[trades_df['type'] == 'SELL']
+        
+        if not buy_trades.empty:
+            fig.add_trace(go.Scatter(
+                x=buy_trades['timestamp'],
+                y=buy_trades['price'],
+                mode='markers',
+                marker=dict(color='green', size=10, symbol='triangle-up'),
+                name='BUY'
+            ))
+        if not sell_trades.empty:
+            fig.add_trace(go.Scatter(
+                x=sell_trades['timestamp'],
+                y=sell_trades['price'],
+                mode='markers',
+                marker=dict(color='red', size=10, symbol='triangle-down'),
+                name='SELL'
+            ))
+    
+    # Configure layout
     fig.update_layout(
         height=600,
         title=f"{symbol} {interval} Chart",
@@ -108,21 +197,26 @@ def render_chart_and_metrics(df, symbol, interval, chart_type, show_volume, grid
         margin=dict(l=50, r=50, t=80, b=100),
         hovermode='x unified'
     )
-
+    
     st.plotly_chart(fig, use_container_width=True, key=f"{symbol}_{interval}")
-
+    
+    # Display market metrics
     if not df.empty:
         latest = df.iloc[-1]
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Aktueller Preis", f"{latest['close']:,.2f}", f"{df['price_change'].iloc[-1]:,.2f}%")
+        col1.metric("Aktueller Preis", f"{latest['close']:,.2f}", f"{df['price_change'].iloc[-1]:,.2f}%" if 'price_change' in df else "-")
         col2.metric("Tageshöchst", f"{df['high'].max():,.2f}")
         col3.metric("Tagestief", f"{df['low'].min():,.2f}")
-        col4.metric("Durchschnittsrange", f"{df['range'].mean():,.2f}%")
-
+        col4.metric("Durchschnittsrange", f"{df['range'].mean():,.2f}%" if 'range' in df else "-")
+    
+    # Show full data
     with st.expander("Vollständige Kursdaten anzeigen"):
         st.dataframe(df[["timestamp", "open", "high", "low", "close", "volume"]], use_container_width=True)
 
-def display_bot_results(results):
+def display_bot_results(results, df=None):
+    if not results:
+        return
+        
     st.subheader("Grid Bot Performance")
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Initialinvestition", f"{results['initial_investment']:,.2f} USDT")
@@ -147,8 +241,219 @@ def display_bot_results(results):
             "Preis": results['grid_lines']
         }), hide_index=True)
 
+def display_bot_results(results, df=None):
+    if not results:
+        return
+        
+    st.subheader("Grid Bot Performance")
+    
+    # First row of metrics
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Initialinvestition", f"{results['initial_investment']:,.2f} USDT")
+    col2.metric("Endwert", f"{results['final_value']:,.2f} USDT", f"{results['profit_pct']:.2f}%")
+    col3.metric("Gewinn/Verlust", f"{results['profit_usdt']:,.2f} USDT")
+    col4.metric("Gebühren gesamt", f"{results['fees_paid']:,.4f} USDT")
+
+    # Second row of metrics - FIXED
+    col5, col6, col7, col8 = st.columns(4)
+    col5.metric("Anzahl Trades", results['num_trades'])
+    col6.metric("Durchschn. Invest/Grid", f"{results['average_investment_per_grid']:,.2f} USDT")
+    col7.metric("Finales USDT", f"{results['final_position']['usdt']:,.2f}")
+    col8.metric("Finale Coins", f"{results['final_position']['coin']:,.6f}")
+
+    # Position summary - FIXED
+    st.write(f"**Endposition:** {results['final_position']['coin']:,.6f} Coins + "
+             f"{results['final_position']['usdt']:,.2f} USDT = {results['final_value']:,.2f} USDT")
+
+    # Grid configuration table - FIXED
+    with st.expander("Grid Konfiguration"):
+        st.write(f"**Grid Modus:** {results['grid_mode'].capitalize()}")
+        st.write(f"**Preisspanne:** {results['lower_price']:.4f} - {results['upper_price']:.4f}")
+        st.dataframe(pd.DataFrame({
+            "Grid Level": range(1, len(results['grid_lines']) + 1),
+            "Preis": results['grid_lines']
+        }), hide_index=True)
+
+    # Trade log with profit fix
     if results.get('trade_log'):
         with st.expander(f"Handelsprotokoll ({len(results['trade_log'])} Trades)"):
             trade_df = pd.DataFrame(results['trade_log'])
-            trade_df['timestamp'] = trade_df['timestamp'].dt.strftime('%Y-%m-%d %H:%M')
-            st.dataframe(trade_df, hide_index=True)
+            
+            # Convert profit to float and format
+            trade_df['profit'] = trade_df['profit'].astype(float)
+            
+            # Format columns
+            trade_df = trade_df.round({
+                'price': 4,
+                'amount': 8,
+                'fee': 4,
+                'profit': 4
+            })
+            
+            # Apply styling
+            def color_profit(val):
+                if val > 0:
+                    return 'color: green; font-weight: bold;'
+                elif val < 0:
+                    return 'color: red; font-weight: bold;'
+                return ''
+            
+            styled_df = trade_df.style.format({
+                'price': '{:,.4f}',
+                'amount': '{:.8f}',
+                'fee': '{:.4f}',
+                'profit': '{:.4f}'
+            }).applymap(color_profit, subset=['profit'])
+            
+            # Display with proper headers
+            st.dataframe(styled_df, hide_index=True, column_order=[
+                'timestamp', 'type', 'price', 'amount', 'fee', 'profit'
+            ])
+    
+    # ... rest of function ...
+            
+            # Create styled DataFrame
+            styled_df = trade_df.style.applymap(color_profit, subset=['profit'])
+            
+            # Display with column formatting
+            st.dataframe(styled_df, hide_index=True, 
+                         column_config={
+                             "timestamp": "Zeitstempel",
+                             "type": "Typ",
+                             "price": st.column_config.NumberColumn("Preis", format="%.4f"),
+                             "amount": st.column_config.NumberColumn("Menge", format="%.8f"),
+                             "fee": st.column_config.NumberColumn("Gebühr", format="%.4f"),
+                             "profit": st.column_config.NumberColumn("Gewinn", format="%.4f")
+                         })
+
+    # Simulation verification metrics
+    if df is not None and not df.empty:
+        st.subheader("Simulation Verification")
+        
+        # Calculate metrics
+        buy_hold_return = (df['close'].iloc[-1] - df['close'].iloc[0]) / df['close'].iloc[0] * 100
+        bot_return = results['profit_pct']
+        fee_ratio = results['fees_paid'] / results['initial_investment'] * 100
+        
+        # Display metrics
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Buy & Hold Return", f"{buy_hold_return:.2f}%")
+        col2.metric("Bot Return", f"{bot_return:.2f}%", f"{(bot_return - buy_hold_return):.2f}%")
+        col3.metric("Fee Impact", f"{fee_ratio:.2f}%")
+
+def plot_simulation_pattern(df, pattern):
+    """Generate explanation visualization for each pattern"""
+    fig = go.Figure()
+    title = pattern.replace("_", " ").title() + " Pattern"
+    
+    # Add price trace for all patterns
+    fig.add_trace(go.Scatter(x=df['timestamp'], y=df['close'], name='Price', line=dict(width=2)))
+    
+    # Pattern-specific annotations
+    if pattern == 'linear_up':
+        fig.update_layout(
+            title=title,
+            annotations=[dict(
+                x=0.5, y=0.9, xref="paper", yref="paper",
+                text="✅ Bot should place BUYs at start and SELLs during rise",
+                showarrow=False, font=dict(size=14))
+            ])
+    
+    elif pattern == 'linear_down':
+        fig.add_annotation(
+            x=df['timestamp'].iloc[-1], y=df['close'].iloc[-1],
+            text="✅ Expected: BUYs during decline, fewer SELLs",
+            showarrow=True, arrowhead=4, ax=0, ay=-40)
+        fig.update_layout(title=title)
+    
+    elif pattern == 'sine':
+        # Add horizontal lines showing expected buy/sell zones
+        mid_price = (df['close'].max() + df['close'].min()) / 2
+        amplitude = (df['close'].max() - df['close'].min()) / 2
+        
+        fig.add_hline(y=mid_price + amplitude*0.7, line_dash="dot", 
+                     annotation_text="SELL Zone", annotation_position="right top")
+        fig.add_hline(y=mid_price - amplitude*0.7, line_dash="dot", 
+                     annotation_text="BUY Zone", annotation_position="right bottom")
+        fig.update_layout(
+            title=title,
+            annotations=[dict(
+                x=0.5, y=0.05, xref="paper", yref="paper",
+                text="✅ Bot should BUY in valleys and SELL at peaks",
+                showarrow=False, font=dict(size=14))
+            ])
+    
+    elif pattern == 'range_bound':
+        fig.add_hline(y=df['close'].max(), line_dash="dot", annotation_text="Upper Range")
+        fig.add_hline(y=df['close'].min(), line_dash="dot", annotation_text="Lower Range")
+        fig.update_layout(
+            title=title,
+            annotations=[dict(
+                x=0.5, y=0.9, xref="paper", yref="paper",
+                text="✅ Bot should profit from multiple BUY/SELL cycles",
+                showarrow=False, font=dict(size=14))
+            ])
+    
+    elif pattern == 'breakout':
+        # Add vertical line at breakout point
+        midpoint = len(df) // 2
+        fig.add_vline(x=df['timestamp'].iloc[midpoint], line_dash="dash", 
+                     annotation_text="Breakout Point", annotation_position="top")
+        
+        # Add trend lines
+        fig.add_trace(go.Scatter(
+            x=[df['timestamp'].iloc[0], df['timestamp'].iloc[midpoint]],
+            y=[df['close'].iloc[0], df['close'].iloc[midpoint]],
+            mode='lines', line=dict(dash='dash', color='gray'),
+            name='Pre-Breakout'
+        ))
+        fig.add_trace(go.Scatter(
+            x=[df['timestamp'].iloc[midpoint], df['timestamp'].iloc[-1]],
+            y=[df['close'].iloc[midpoint], df['close'].iloc[-1]],
+            mode='lines', line=dict(dash='dash', color='orange'),
+            name='Post-Breakout'
+        ))
+        fig.update_layout(
+            title=title,
+            annotations=[dict(
+                x=0.5, y=0.9, xref="paper", yref="paper",
+                text="✅ Bot should capture gains after breakout",
+                showarrow=False, font=dict(size=14))
+            ])
+    
+    elif pattern == 'volatile':
+        # Add volatility bands
+        rolling_high = df['high'].rolling(5).max().fillna(method='bfill')
+        rolling_low = df['low'].rolling(5).min().fillna(method='bfill')
+        
+        fig.add_trace(go.Scatter(
+            x=df['timestamp'], y=rolling_high,
+            line=dict(color='rgba(255,0,0,0.2)'), 
+            name='Volatility High'
+        ))
+        fig.add_trace(go.Scatter(
+            x=df['timestamp'], y=rolling_low,
+            line=dict(color='rgba(0,255,0,0.2)'), 
+            fill='tonexty', name='Volatility Low'
+        ))
+        fig.update_layout(
+            title=title,
+            annotations=[dict(
+                x=0.5, y=0.9, xref="paper", yref="paper",
+                text="✅ Bot should capture large price swings",
+                showarrow=False, font=dict(size=14))
+            ])
+    
+    else:  # Default case
+        fig.update_layout(title=title)
+    
+    # Common layout settings
+    fig.update_layout(
+        height=400,
+        template="plotly_dark",
+        xaxis_title="Time",
+        yaxis_title="Price",
+        margin=dict(l=50, r=50, t=80, b=50)
+    )
+    
+    st.plotly_chart(fig, use_container_width=True)
