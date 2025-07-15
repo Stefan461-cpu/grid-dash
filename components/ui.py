@@ -1,13 +1,16 @@
 # components/ui.py - Corrected Version
 import streamlit as st
 import pandas as pd
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 import plotly.graph_objects as go
 
 def get_user_settings():
     with st.sidebar:
         st.header("Einstellungen")
-        st.caption("ui.py – Version 2.1 – 2025-07-12")
+        jetzt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        st.caption(f"ui.py – Version 10 – Stand: {jetzt}")
+
+        # st.caption("ui.py – Version 10 – 2025-07-15")
         
         # Simulation toggle
         use_simulated = st.checkbox("Use Simulated Data", False, key="sim_toggle")
@@ -213,127 +216,132 @@ def render_chart_and_metrics(df, symbol, interval, chart_type, show_volume, grid
     with st.expander("Vollständige Kursdaten anzeigen"):
         st.dataframe(df[["timestamp", "open", "high", "low", "close", "volume"]], use_container_width=True)
 
-def display_bot_results(results, df=None):
-    if not results:
-        return
+# def display_bot_results(results, df=None):
+#     if not results:
+#         return
         
-    st.subheader("Grid Bot Performance")
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Initialinvestition", f"{results['initial_investment']:,.2f} USDT")
-    col2.metric("Endwert", f"{results['final_value']:,.2f} USDT", f"{results['profit_pct']:.2f}%")
-    col3.metric("Gewinn/Verlust", f"{results['profit_usdt']:,.2f} USDT")
-    col4.metric("Gebühren gesamt", f"{results['fees_paid']:,.4f} USDT")
+#     st.subheader("Grid Bot Performance")
+#     col1, col2, col3, col4 = st.columns(4)
+#     col1.metric("Initialinvestition", f"{results['initial_investment']:,.2f} USDT")
+#     col2.metric("Endwert", f"{results['final_value']:,.2f} USDT", f"{results['profit_pct']:.2f}%")
+#     col3.metric("Gewinn/Verlust", f"{results['profit_usdt']:,.2f} USDT")
+#     col4.metric("Gebühren gesamt", f"{results['fees_paid']:,.4f} USDT")
 
-    col5, col6, col7, col8 = st.columns(4)
-    col5.metric("Anzahl Trades", results['num_trades'])
-    col6.metric("Durchschn. Invest/Grid", f"{results['average_investment_per_grid']:,.2f} USDT")
-    col7.metric("Finales USDT", f"{results['final_position']['usdt']:,.2f}")
-    col8.metric("Finale Coins", f"{results['final_position']['coin']:,.6f}")
+#     col5, col6, col7, col8 = st.columns(4)
+#     col5.metric("Anzahl Trades", results['num_trades'])
+#     col6.metric("Durchschn. Invest/Grid", f"{results['average_investment_per_grid']:,.2f} USDT")
+#     col7.metric("Finales USDT", f"{results['final_position']['usdt']:,.2f}")
+#     col8.metric("Finale Coins", f"{results['final_position']['coin']:,.6f}")
 
-    st.write(f"**Endposition:** {results['final_position']['coin']:,.6f} Coins + "
-             f"{results['final_position']['usdt']:,.2f} USDT = {results['final_value']:,.2f} USDT")
+#     st.write(f"**Endposition:** {results['final_position']['coin']:,.6f} Coins + "
+#              f"{results['final_position']['usdt']:,.2f} USDT = {results['final_value']:,.2f} USDT")
 
-    with st.expander("Grid Konfiguration"):
-        st.write(f"**Grid Modus:** {results['grid_mode'].capitalize()}")
-        st.write(f"**Preisspanne:** {results['lower_price']:.4f} - {results['upper_price']:.4f}")
-        st.dataframe(pd.DataFrame({
-            "Grid Level": range(1, len(results['grid_lines']) + 1),
-            "Preis": results['grid_lines']
-        }), hide_index=True)
+#     with st.expander("Grid Konfiguration"):
+#         st.write(f"**Grid Modus:** {results['grid_mode'].capitalize()}")
+#         st.write(f"**Preisspanne:** {results['lower_price']:.4f} - {results['upper_price']:.4f}")
+#         st.dataframe(pd.DataFrame({
+#             "Grid Level": range(1, len(results['grid_lines']) + 1),
+#             "Preis": results['grid_lines']
+#         }), hide_index=True)
 
 def display_bot_results(results, df=None):
     if not results:
+        st.warning("No simulation results available")
         return
         
     st.subheader("Grid Bot Performance")
     
-    # First row of metrics
+    # Metrics - First Row
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Initialinvestition", f"{results['initial_investment']:,.2f} USDT")
-    col2.metric("Endwert", f"{results['final_value']:,.2f} USDT", f"{results['profit_pct']:.2f}%")
-    col3.metric("Gewinn/Verlust", f"{results['profit_usdt']:,.2f} USDT")
-    col4.metric("Gebühren gesamt", f"{results['fees_paid']:,.4f} USDT")
+    col1.metric("Initial Investment", f"{results.get('initial_investment', 0):,.2f} USDT")
+    col2.metric("Final Value", 
+               f"{results.get('final_value', 0):,.2f} USDT", 
+               f"{results.get('profit_pct', 0):.2f}%")
+    col3.metric("Profit/Loss", f"{results.get('profit_usdt', 0):,.2f} USDT")
+    col4.metric("Total Fees", f"{results.get('fees_paid', 0):,.4f} USDT")
 
-    # Second row of metrics - FIXED
+    # Metrics - Second Row
     col5, col6, col7, col8 = st.columns(4)
-    col5.metric("Anzahl Trades", results['num_trades'])
-    col6.metric("Durchschn. Invest/Grid", f"{results['average_investment_per_grid']:,.2f} USDT")
-    col7.metric("Finales USDT", f"{results['final_position']['usdt']:,.2f}")
-    col8.metric("Finale Coins", f"{results['final_position']['coin']:,.6f}")
+    col5.metric("Number of Trades", results.get('num_trades', 0))
+    
+    # Handle average investment per grid with fallback
+    grid_investment = results.get('average_investment_per_grid', 
+                                results['initial_investment']/len(results['grid_lines']) 
+                                if 'grid_lines' in results else 0)
+    col6.metric("Avg. Investment/Grid", f"{grid_investment:,.2f} USDT")
+    
+    col7.metric("Final USDT", f"{results.get('final_position', {}).get('usdt', 0):,.2f}")
+    col8.metric("Final Coins", f"{results.get('final_position', {}).get('coin', 0):,.6f}")
 
-    # Position summary - FIXED
-    st.write(f"**Endposition:** {results['final_position']['coin']:,.6f} Coins + "
-             f"{results['final_position']['usdt']:,.2f} USDT = {results['final_value']:,.2f} USDT")
+    # Price Information Section - UPDATED
+    st.write("---")
+    price_info = [
+        ("Initial Price", results.get('initial_price', df.iloc[0]['close'] if df is not None else 'N/A')),
+        ("Final Price", results.get('final_price', df.iloc[-1]['close'] if df is not None else 'N/A')),
+        ("Price Change", f"{((results.get('final_price', 0) - results.get('initial_price', 0)))/max(results.get('initial_price', 1),1)*100:.2f}%")
+    ]
+    for label, value in price_info:
+        st.write(f"**{label}:** {value}")
 
-    # Grid configuration table - FIXED
-    with st.expander("Grid Konfiguration"):
-        st.write(f"**Grid Modus:** {results['grid_mode'].capitalize()}")
-        st.write(f"**Preisspanne:** {results['lower_price']:.4f} - {results['upper_price']:.4f}")
-        st.dataframe(pd.DataFrame({
-            "Grid Level": range(1, len(results['grid_lines']) + 1),
-            "Preis": results['grid_lines']
-        }), hide_index=True)
+    # Position Summary
+    st.write("---")
+    final_coin = results.get('final_position', {}).get('coin', 0)
+    final_usdt = results.get('final_position', {}).get('usdt', 0)
+    st.write(f"**Final Position:** {final_coin:,.6f} Coins + {final_usdt:,.2f} USDT = {results.get('final_value', 0):,.2f} USDT")
 
-    # Trade log with profit fix
+    # Grid Configuration
+    with st.expander("Grid Configuration"):
+        if 'grid_mode' in results:
+            st.write(f"**Grid Mode:** {results['grid_mode'].capitalize()}")
+        if 'lower_price' in results and 'upper_price' in results:
+            st.write(f"**Price Range:** {results['lower_price']:.4f} - {results['upper_price']:.4f}")
+        if 'grid_lines' in results:
+            st.dataframe(pd.DataFrame({
+                "Grid Level": range(1, len(results['grid_lines']) + 1),
+                "Price": results['grid_lines']
+            }), hide_index=True)
+
+    # Trade Log
     if results.get('trade_log'):
-        with st.expander(f"Handelsprotokoll ({len(results['trade_log'])} Trades)"):
+        with st.expander(f"Trade Log ({len(results['trade_log'])} Trades)"):
             trade_df = pd.DataFrame(results['trade_log'])
             
-            # Convert profit to float and format
-            trade_df['profit'] = trade_df['profit'].astype(float)
-            
-            # Format columns
-            trade_df = trade_df.round({
-                'price': 4,
-                'amount': 8,
-                'fee': 4,
-                'profit': 4
-            })
-            
-            # Apply styling
-            def color_profit(val):
-                if val > 0:
-                    return 'color: green; font-weight: bold;'
-                elif val < 0:
-                    return 'color: red; font-weight: bold;'
-                return ''
-            
+            # Format numeric columns
             styled_df = trade_df.style.format({
                 'price': '{:,.4f}',
                 'amount': '{:.8f}',
                 'fee': '{:.4f}',
-                'profit': '{:.4f}'
-            }).applymap(color_profit, subset=['profit'])
+                'profit': '{:.2f}' if 'profit' in trade_df.columns else None
+            })
             
-            # Display with proper headers
-            st.dataframe(styled_df, hide_index=True, column_order=[
-                'timestamp', 'type', 'price', 'amount', 'fee', 'profit'
-            ])
-    
-    # ... rest of function ...
+            # Apply profit coloring
+            if 'profit' in trade_df.columns:
+                def color_profit(val):
+                    if val > 0: return 'color: green; font-weight: bold;'
+                    elif val < 0: return 'color: red; font-weight: bold;'
+                    return ''
+                styled_df = styled_df.applymap(color_profit, subset=['profit'])
             
-            # Create styled DataFrame
-            styled_df = trade_df.style.applymap(color_profit, subset=['profit'])
-            
-            # Display with column formatting
             st.dataframe(styled_df, hide_index=True, 
                          column_config={
-                             "timestamp": "Zeitstempel",
-                             "type": "Typ",
-                             "price": st.column_config.NumberColumn("Preis", format="%.4f"),
-                             "amount": st.column_config.NumberColumn("Menge", format="%.8f"),
-                             "fee": st.column_config.NumberColumn("Gebühr", format="%.4f"),
-                             "profit": st.column_config.NumberColumn("Gewinn", format="%.4f")
+                             "timestamp": "Time",
+                             "type": "Type",
+                             "price": st.column_config.NumberColumn("Price", format="%.4f"),
+                             "amount": st.column_config.NumberColumn("Amount", format="%.8f"),
+                             "fee": st.column_config.NumberColumn("Fee", format="%.4f"),
+                             "profit": st.column_config.NumberColumn("Profit", format="%.2f")
                          })
 
-    # Simulation verification metrics
+    # Simulation Verification
     if df is not None and not df.empty:
         st.subheader("Simulation Verification")
         
         # Calculate metrics
-        buy_hold_return = (df['close'].iloc[-1] - df['close'].iloc[0]) / df['close'].iloc[0] * 100
-        bot_return = results['profit_pct']
-        fee_ratio = results['fees_paid'] / results['initial_investment'] * 100
+        initial = results.get('initial_price', df.iloc[0]['close'])
+        final = results.get('final_price', df.iloc[-1]['close'])
+        buy_hold_return = (final - initial) / initial * 100
+        bot_return = results.get('profit_pct', 0)
+        fee_ratio = results.get('fees_paid', 0) / results.get('initial_investment', 1) * 100
         
         # Display metrics
         col1, col2, col3 = st.columns(3)
@@ -341,11 +349,14 @@ def display_bot_results(results, df=None):
         col2.metric("Bot Return", f"{bot_return:.2f}%", f"{(bot_return - buy_hold_return):.2f}%")
         col3.metric("Fee Impact", f"{fee_ratio:.2f}%")
 
-    # In display_bot_results()
-    # Unbekannte Variable avg_cost_basis; keine Ahnung, wo die herkommt, daher auskommentiert
-    # st.metric("Avg Cost Basis", 
-    #      f"{results['avg_cost_basis']:,.2f} USDT",
-    #      f"{(final_price - results['avg_cost_basis'])/results['avg_cost_basis']*100:.2f}%")
+    # Debug Information
+    if 'debug' in results:
+        with st.expander("Debug Information"):
+            st.write("Buy Prices:", results['debug'].get('buy_prices', []))
+            st.write("Coin Amounts:", results['debug'].get('coin_amounts', []))
+            st.write("Initial Price:", results['debug'].get('initial_price', 'N/A'))
+            st.write("Final Price:", results['debug'].get('final_price', 'N/A'))
+
 
 def plot_simulation_pattern(df, pattern):
     """Generate explanation visualization for each pattern"""
@@ -461,5 +472,12 @@ def plot_simulation_pattern(df, pattern):
         yaxis_title="Price",
         margin=dict(l=50, r=50, t=80, b=50)
     )
+    
+    # # In display_bot_results()
+    # if "debug" in results:
+    #     with st.expander("Debug Info"):
+    #         st.write("Buy Prices:", results["debug"]["buy_prices"])
+    #         st.write("Coin Amounts:", results["debug"]["coin_amounts"])
+    #         st.write(f"Initial/Final Price: {results['debug']['initial_price']} → {results['debug']['final_price']}")   
     
     st.plotly_chart(fig, use_container_width=True)
