@@ -249,6 +249,10 @@ def display_bot_results(results, df=None):
     col7.metric("Final USDT", f"{results.get('final_position', {}).get('usdt', 0):,.2f}")
     col8.metric("Final Coins", f"{results.get('final_position', {}).get('coin', 0):,.6f}")
 
+    # Add to display_bot_results()
+    st.write(f"**Initial Coin Purchase:** {results.get('initial_coin', 0):.6f}")
+    st.write(f"**Reserved for Sell Grids:** {results.get('reserved_coin', 0):.6f}")
+
     # Price Information Section
     st.write("---")
     price_info = [

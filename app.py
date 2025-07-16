@@ -2,8 +2,9 @@ import streamlit as st
 from datetime import date, timedelta
 from components.ui import get_user_settings, render_chart_and_metrics, display_bot_results, plot_simulation_pattern  # FIXED TYPO HERE
 from services.bitget_api import fetch_bitget_candles
-from services.bot import simulate_grid_bot
+from services.bot import calculate_grid_lines, simulate_grid_bot
 from services.simulator import generate_simulated_data
+
 
 # Seiteneinstellungen
 st.set_page_config(page_title="Grid Bot Simulator", layout="wide")
@@ -76,6 +77,23 @@ current_settings = {k: v for k, v in user_settings.items() if k != "bot_run_trig
 if st.session_state.prev_settings != current_settings:
     st.session_state.prev_settings = current_settings
     st.session_state.results = None
+
+# Vor dem simulate_grid_bot-Aufruf:
+try:
+    # Typkonvertierung sicherstellen
+    bot_params = user_settings["bot_params"]
+    results = simulate_grid_bot(
+        df=df,
+        total_investment=float(bot_params["total_investment"]),
+        lower_price=float(bot_params["lower_price"]),
+        upper_price=float(bot_params["upper_price"]),
+        num_grids=int(bot_params["num_grids"]),
+        grid_mode=str(bot_params["grid_mode"]),
+        fee_rate=float(bot_params["fee_rate"])
+    )
+except (ValueError, KeyError) as e:
+    st.error(f"Parameter-Fehler: {str(e)}")
+    st.stop()
 
 # Grid Bot starten
 if user_settings["enable_bot"] and user_settings.get("bot_run_triggered", False):
