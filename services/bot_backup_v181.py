@@ -1,15 +1,14 @@
-# bot.py - Version 19.0 (Final Robust Implementation)
+# bot.py - Version 18.2 (Verbesserte Grid-Initialisierung)
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 @dataclass
 class GridState:
     price: float
-    side: str  # 'buy' or 'sell'
-    trade_amount: float  # Fixed coin amount for this grid
-    coin_reserved: float = 0.0  # Only for sell grids
+    side: Optional[str] = None  # 'buy' oder 'sell'
+    coin_reserved: float = 0.0
     trade_count: int = 0
 
 class GridBot:
@@ -27,29 +26,24 @@ class GridBot:
         self.grid_lines = self._calculate_grid_lines(lower_price, upper_price, num_grids, grid_mode)
         self.fee_rate = fee_rate
         self.position = {'usdt': float(total_investment), 'coin': 0.0}
-        self.initial_coin = 0.0
         self.trade_log = []
         self.grids: Dict[float, GridState] = {}
         self.last_price = initial_price
         self.last_traded_price = None
         
-        # FIFO inventory tracking (amount, buy_price, timestamp)
-        self.coin_inventory: List[Tuple[float, float, pd.Timestamp]] = []
-        
-        # Calculate base USDT amount per grid (99% of total investment)
-        self.base_amount_usdt = (total_investment * 0.99) / num_grids
         self._initialize_grids(total_investment, initial_price)
 
-    def _validate_inputs(self, total_investment: float, lower_price: float,
-                        upper_price: float, num_grids: int, fee_rate: float):
+    def _validate_inputs(self, *args):
+        total_investment, lower_price, upper_price, num_grids, fee_rate = args
+        
         if not all(isinstance(x, (int, float)) for x in [total_investment, lower_price, upper_price, fee_rate]):
-            raise ValueError("All prices must be numeric")
+            raise ValueError("Alle Preise müssen numerisch sein")
         if lower_price >= upper_price:
-            raise ValueError("Upper price must be > lower price")
+            raise ValueError("Obere Preisgrenze muss > untere sein")
         if num_grids < 2:
-            raise ValueError("Minimum 2 grid levels required")
+            raise ValueError("Mindestens 2 Grid-Levels benötigt")
         if not 0 <= fee_rate < 0.1:
-            raise ValueError("Fee must be between 0% and 10%")
+            raise ValueError("Gebühr muss zwischen 0% und 10% liegen")
 
     def _calculate_grid_lines(self, lower: float, upper: float, num: int, mode: str) -> List[float]:
         if mode == 'arithmetic':
@@ -61,41 +55,51 @@ class GridBot:
         if initial_price is None:
             initial_price = self.grid_lines[len(self.grid_lines) // 2]
         
-        # 1. Immediate coin purchase at initial price (50% of capital)
-        initial_investment = total_investment * 0.5
-        self.initial_coin = initial_investment / (initial_price * (1 + self.fee_rate))
-        fee = self.initial_coin * initial_price * self.fee_rate
+        # Calculate grid distribution based on initial price
+        sell_grids = [p for p in self.grid_lines if p > initial_price]
+        buy_grids = [p for p in self.grid_lines if p < initial_price]
         
-        self.position['usdt'] -= (self.initial_coin * initial_price) + fee
-        self.position['coin'] += self.initial_coin
-        self.coin_inventory.append((self.initial_coin, initial_price, pd.Timestamp.now()))
+        # Balanced allocation (50% for buys, 50% for sells)
+        usdt_per_sell_grid = (total_investment * 0.5) / len(sell_grids) if sell_grids else 0
+        usdt_per_buy_grid = (total_investment * 0.5) / len(buy_grids) if buy_grids else 0
         
-        # 2. Initialize all grids with fixed trade amounts
-        for price in self.grid_lines:
-            if price > initial_price:  # Sell grid
-                coin_amount = self.base_amount_usdt / (price * (1 + self.fee_rate))
-                self.grids[price] = GridState(
-                    price=round(price, 4),
-                    side='sell',
-                    trade_amount=coin_amount,
-                    coin_reserved=coin_amount
-                )
-            elif price < initial_price:  # Buy grid
-                coin_amount = self.base_amount_usdt / (price * (1 + self.fee_rate))
-                self.grids[price] = GridState(
-                    price=round(price, 4),
-                    side='buy',
-                    trade_amount=coin_amount
-                )
+        # Initialize coin position by buying at initial price
+        if initial_price in self.grid_lines:
+            buy_amount = (total_investment * 0.5) / (initial_price * (1 + self.fee_rate))
+            self.position['usdt'] -= (buy_amount * initial_price) * (1 + self.fee_rate)
+            self.position['coin'] += buy_amount
+        
+        # Initialize sell grids (above initial price)
+        for price in sell_grids:
+            coin_amount = usdt_per_sell_grid / (price * (1 + self.fee_rate))
+            self.grids[price] = GridState(
+                price=round(price, 4),
+                coin_reserved=coin_amount
+            )
+        
+        # Initialize buy grids (below initial price)
+        for price in buy_grids:
+            self.grids[price] = GridState(
+                price=round(price, 4),
+                coin_reserved=0.0  # No coin reserved for buy grids
+            )
+        
+        # Handle the initial price grid if it exists in grid lines
+        if initial_price in self.grid_lines:
+            self.grids[initial_price] = GridState(
+                price=round(initial_price, 4),
+                coin_reserved=0.0  # Neutral grid at initial price
+            )
 
     def process_candle(self, candle: pd.Series):
         try:
             current_price = float(candle['close'])
             prev_price = self.last_price if self.last_price is not None else float(candle['open'])
             
-            # Check price movements between grid levels
             for price in np.linspace(prev_price, current_price, 20):
                 for grid in self.grids.values():
+                    grid.side = 'sell' if price < grid.price else 'buy'
+                    
                     if ((prev_price < grid.price < current_price and grid.side == 'sell') or
                        (prev_price > grid.price > current_price and grid.side == 'buy')):
                         if grid.price != getattr(self, 'last_traded_price', None):
@@ -103,63 +107,44 @@ class GridBot:
             
             self.last_price = current_price
         except Exception as e:
-            raise RuntimeError(f"Candle processing error: {str(e)}")
+            raise RuntimeError(f"Candle-Verarbeitungsfehler: {str(e)}")
 
     def _execute_trade(self, grid: GridState, candle: pd.Series):
         try:
-            fee = 0.0
-            profit = 0.0
-            timestamp = candle['timestamp']
+            trade_amount, fee, profit = 0.0, 0.0, 0.0
+            current_price = float(candle['close'])
             
             if grid.side == 'sell':
-                # FIFO implementation - sell oldest coins first
-                remaining_amount = grid.trade_amount
-                
-                while remaining_amount > 0 and self.coin_inventory:
-                    oldest_amount, oldest_price, oldest_time = self.coin_inventory[0]
-                    sell_amount = min(oldest_amount, remaining_amount)
-                    
-                    # Calculate profit for this portion
-                    profit += (grid.price - oldest_price) * sell_amount
-                    
-                    # Update inventory
-                    if oldest_amount == sell_amount:
-                        self.coin_inventory.pop(0)
-                    else:
-                        self.coin_inventory[0] = (oldest_amount - sell_amount, oldest_price, oldest_time)
-                    
-                    remaining_amount -= sell_amount
-                
-                if remaining_amount > 0:
-                    return  # Not enough coins to complete trade
-                
-                # Apply fees and update position
-                fee = grid.trade_amount * grid.price * self.fee_rate
-                self.position['coin'] -= grid.trade_amount
-                self.position['usdt'] += (grid.trade_amount * grid.price) - fee
-                profit -= fee
-                
-                # Update grid reservation
-                if grid.price in self.grids:
-                    self.grids[grid.price].coin_reserved -= grid.trade_amount
-            else:  # buy
-                # Verify sufficient USDT
-                required_usdt = grid.trade_amount * grid.price * (1 + self.fee_rate)
-                if self.position['usdt'] < required_usdt:
+                trade_amount = min(grid.coin_reserved, self.position['coin'])
+                if trade_amount <= 1e-8:
                     return
                 
-                # Execute buy
-                fee = grid.trade_amount * grid.price * self.fee_rate
-                self.position['usdt'] -= required_usdt
-                self.position['coin'] += grid.trade_amount
-                self.coin_inventory.append((grid.trade_amount, grid.price, timestamp))
+                fee = trade_amount * grid.price * self.fee_rate
+                self.position['coin'] -= trade_amount
+                self.position['usdt'] += trade_amount * grid.price - fee
+                grid.coin_reserved -= trade_amount
+                
+                buy_trades = [t for t in self.trade_log if t['type'] == 'BUY']
+                if buy_trades:
+                    total_cost = sum(t['price'] * t['amount'] for t in buy_trades)
+                    total_amount = sum(t['amount'] for t in buy_trades)
+                    cost_basis = total_cost / total_amount
+                    profit = (grid.price - cost_basis) * trade_amount - fee
+            else:
+                available_usdt = self.position['usdt']
+                trade_amount = available_usdt / (grid.price * (1 + self.fee_rate))
+                if trade_amount <= 1e-8:
+                    return
+                
+                fee = trade_amount * grid.price * self.fee_rate
+                self.position['usdt'] -= (trade_amount * grid.price) + fee
+                self.position['coin'] += trade_amount
 
-            # Log the trade
             self.trade_log.append({
-                'timestamp': timestamp,
+                'timestamp': candle['timestamp'],
                 'type': grid.side.upper(),
                 'price': float(grid.price),
-                'amount': float(grid.trade_amount),
+                'amount': float(trade_amount),
                 'fee': float(fee),
                 'profit': float(profit),
                 'inventory_slots': len([g for g in self.grids.values() if g.coin_reserved > 0])
@@ -169,7 +154,7 @@ class GridBot:
             grid.trade_count += 1
             
         except Exception as e:
-            raise RuntimeError(f"Trade error at {grid.price}: {str(e)}")
+            raise RuntimeError(f"Trade-Fehler bei {grid.price}: {str(e)}")
 
 def simulate_grid_bot(df: pd.DataFrame,
                      total_investment: float,
@@ -179,10 +164,22 @@ def simulate_grid_bot(df: pd.DataFrame,
                      grid_mode: str = 'geometric',
                      fee_rate: float = 0.001) -> Dict:
     """
-    Simulates grid bot trading with:
-    - FIFO profit calculation
-    - Consistent trade amounts
-    - Exact fee accounting
+    Returns:
+        {
+            'initial_investment': float,
+            'final_value': float,
+            'profit_usdt': float,  # Summe aller Trade-Profits
+            'profit_pct': float,   # Relativer Profit (vom Investment)
+            'fees_paid': float,
+            'num_trades': int,
+            'trade_log': List[Dict],
+            'grid_lines': List[float],
+            'final_position': Dict,
+            'initial_price': float,
+            'final_price': float,
+            'price_change_pct': float,  # Reine Kursänderung
+            'error': Optional[str]
+        }
     """
     try:
         initial_price = float(df.iloc[0]['close'])
@@ -194,8 +191,7 @@ def simulate_grid_bot(df: pd.DataFrame,
         final_price = float(df.iloc[-1]['close'])
         final_value = bot.position['usdt'] + bot.position['coin'] * final_price
         
-        # Calculate total profit (including unrealized)
-        total_profit = final_value - total_investment
+        total_profit = sum(t['profit'] for t in bot.trade_log)
         total_fees = sum(t['fee'] for t in bot.trade_log)
         
         return {
@@ -208,8 +204,6 @@ def simulate_grid_bot(df: pd.DataFrame,
             'trade_log': bot.trade_log,
             'grid_lines': bot.grid_lines,
             'final_position': dict(bot.position),
-            'initial_coin': bot.initial_coin,
-            'reserved_coin': sum(g.coin_reserved for g in bot.grids.values()),
             'initial_price': initial_price,
             'final_price': final_price,
             'price_change_pct': ((final_price - initial_price) / initial_price) * 100,
@@ -226,8 +220,6 @@ def simulate_grid_bot(df: pd.DataFrame,
             'trade_log': [],
             'grid_lines': [],
             'final_position': {'usdt': total_investment, 'coin': 0.0},
-            'initial_coin': 0.0,
-            'reserved_coin': 0.0,
             'initial_price': 0.0,
             'final_price': 0.0,
             'price_change_pct': 0.0,
