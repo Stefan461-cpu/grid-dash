@@ -1,4 +1,8 @@
 # bot.py - Version 19.0 (Final Robust Implementation)
+# Diese Version implementiert ein aufwendiges und überflüssiges und falsch implementiertes
+# Buchungssystem für einzelnede Sell-Grids 
+# Basierend auf der Variablen coin_reserved. Dies soll eliminiert werden. 
+
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass

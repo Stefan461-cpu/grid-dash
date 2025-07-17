@@ -1,13 +1,7 @@
-# bot.py - Version 23 (Natürliche Intelligenz unterstützt von ChatGPT)
-# Basierend auf der Variablen coin_reserved. Dies soll eliminiert werden. --> erledigt 
-# Bot Logik Fehler: Mitunter Kauf, statt Verkauf. Frage: Wird das Grid vor jedem Trade aktualisiert?
-# Korrekturen: Das Grid wird für jede Candle aktualisiert, bevor Trades ausgeführt werden.
-# Einführung eines Grid-Status blocked, um zu verhindern, dass ein Grid mehrfach pro Candle gehandelt wird.
-# Diese Version enthält umfassende Fehlerbehandlung und eine verbesserte Logik für die Grid-Berechnung.
-# Versionierung: BOT_VERSION wird automatisch mit dem aktuellen Datum und Uhrzeit aktualisiert.
-# Diese Version ist für die Verwendung in der Grid-Dash App optimiert.
-# Diese Version ist halbwegs stabil, aber es gibt noch einige Optimierungen und Tests, die durchgeführt werden müssen.
-# Auch gibt es Fehlermeldungen auf der Webseite, die mitunter auftreten können.
+# bot.py - Version 21.0 (Final Robust Implementation)
+# Diese Version implementiert ein aufwendiges und überflüssiges und falsch implementiertes
+# Buchungssystem für einzelnede Sell-Grids --> eliminiert 
+# Gridstatus vor jedem Candle-Processing aktualisieren
 
 import numpy as np
 import pandas as pd
@@ -15,9 +9,9 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
-# Versionierung mit aktuellem Datum und Uhrzeit
-BOT_VERSION = f"bot.py – Version 23 – Stand: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+BOT_VERSION = f"bot.py – Version 21.0 – Stand: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
 
+from typing import Dict, List, Optional, Tuple
 
 @dataclass
 class GridState:
@@ -103,51 +97,32 @@ class GridBot:
                     trade_amount=coin_amount
                 )
 
-    def _update_grid_sides(self, current_price: float, blocked_price: Optional[float] = None):
-        for price in self.grid_lines:
-            if price == current_price:
-                continue  # Inaktiv – kein Buy/Sell am exakten Preis
-            if price == blocked_price:
-                self.grids[price].side = 'blocked'  # Blocked grid remains unchanged
-            elif price > current_price:
-                self.grids[price].side = 'sell'
-            elif price < current_price:
-                self.grids[price].side = 'buy'
-
-    
     def process_candle(self, candle: pd.Series):
         try:
             current_price = float(candle['close'])
-            prev_price = self.last_price if self.last_price is not None else float(candle['open'])
-            last_traded_price = self.last_traded_price if self.last_traded_price is not None else prev_price    
-
             # --- Grid-Zustände vor jedem Candle-Processing aktualisieren ---
-            self._update_grid_sides(prev_price, last_traded_price)
-            # for price in self.grid_lines:
-            #     if price > prev_price:
-            #         self.grids[price].side = 'sell'  # Neuer Zustand SELL
-            #     elif price < prev_price:
-            #         self.grids[price].side = 'buy'   # Neuer Zustand BUY
-            #     else:
-            #         continue  # Keine Trades beim exakten Preis
-               
+            for price in self.grid_lines:
+                if price > current_price:
+                    self.grids[price].side = 'sell'  # Neuer Zustand SELL
+                elif price < current_price:
+                    self.grids[price].side = 'buy'   # Neuer Zustand BUY
+                else:
+                    continue  # Keine Trades beim exakten Preis
+
+                prev_price = self.last_price if self.last_price is not None else float(candle['open'])
+                
                 # Check price movements between grid levels
- #               for price in np.linspace(prev_price, current_price, 20):
-            for grid in self.grids.values():
-                if ((prev_price < grid.price < current_price and grid.side == 'sell') or
-                    (prev_price > grid.price > current_price and grid.side == 'buy')):
-                    if grid.price != getattr(self, 'last_traded_price', None):
-                        self._execute_trade(grid, candle)
-                        self.grids[grid.price].side = 'blocked'  # Blocked grid remains unchanged
-
-                        # 🔁 Direkt danach: alle Grids neu bewerten
-                        # self._update_grid_sides(grid.price)
-
-                        self.last_price = current_price
-
+                for price in np.linspace(prev_price, current_price, 20):
+                    for grid in self.grids.values():
+                        if ((prev_price < grid.price < current_price and grid.side == 'sell') or
+                           (prev_price > grid.price > current_price and grid.side == 'buy')):
+                            if grid.price != getattr(self, 'last_traded_price', None):
+                                self._execute_trade(grid, candle)
+                
+                self.last_price = current_price
         except Exception as e:
             raise RuntimeError(f"Candle processing error: {str(e)}")
-        
+
     def _execute_trade(self, grid: GridState, candle: pd.Series):
         try:
             fee = 0.0
@@ -183,12 +158,10 @@ class GridBot:
                 profit -= fee
                 
                 # Update grid reservation
-                # if grid.price in self.grids:
-                    # self.grids[grid.price].coin_reserved -= grid.trade_amount
-                    # coin_reserved nicht mehr aktualisiert – rein auf position['coin'] basierend
-                
+                if grid.price in self.grids:
+                    self.grids[grid.price].coin_reserved -= grid.trade_amount
             else:  # buy
-            # Verify sufficient USDT
+                # Verify sufficient USDT
                 required_usdt = grid.trade_amount * grid.price * (1 + self.fee_rate)
                 if self.position['usdt'] < required_usdt:
                     return
@@ -203,13 +176,11 @@ class GridBot:
             self.trade_log.append({
                 'timestamp': timestamp,
                 'type': grid.side.upper(),
-                'cprice': float(candle['close']),    # current price at trade execution
-                'price': float(grid.price), # price at which the trade was executed
+                'price': float(grid.price),
                 'amount': float(grid.trade_amount),
                 'fee': float(fee),
                 'profit': float(profit),
-#                 'inventory_slots': len([g for g in self.grids.values() if g.coin_reserved > 0])
-                # 'inventory_slots' deaktiviert – coin_reserved wird nicht mehr verwendet
+                'inventory_slots': len([g for g in self.grids.values() if g.coin_reserved > 0])
             })
             
             self.last_traded_price = grid.price
@@ -256,12 +227,10 @@ def simulate_grid_bot(df: pd.DataFrame,
             'grid_lines': bot.grid_lines,
             'final_position': dict(bot.position),
             'initial_coin': bot.initial_coin,
-            #  'reserved_coin': sum(g.coin_reserved for g in bot.grids.values()),
-            'reserved_coin': 0.0,  # coin_reserved deaktiviert
+            'reserved_coin': sum(g.coin_reserved for g in bot.grids.values()),
             'initial_price': initial_price,
             'final_price': final_price,
             'price_change_pct': ((final_price - initial_price) / initial_price) * 100,
-            'bot_version': BOT_VERSION,
             'error': None
         }
     except Exception as e:
@@ -280,6 +249,5 @@ def simulate_grid_bot(df: pd.DataFrame,
             'initial_price': 0.0,
             'final_price': 0.0,
             'price_change_pct': 0.0,
-            'bot_version': BOT_VERSION,
             'error': str(e)
         }

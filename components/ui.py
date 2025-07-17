@@ -35,7 +35,7 @@ def get_user_settings():
             today = date.today()
             start_date = st.date_input("Startdatum", today - timedelta(days=30))
             end_date = st.date_input("Enddatum", today)
-            max_bars = st.slider("Max. Kerzen (10–1000)", 10, 1000, 500)
+            max_bars = st.slider("Max. Kerzen (10–1000)", 10, 1000, 1000)
 
         # Common settings (both simulated and real data)
         st.subheader("Chart Settings")
@@ -61,9 +61,11 @@ def get_user_settings():
             
             col1, col2 = st.columns(2)
             with col1:
-                bot_params["lower_price"] = st.number_input("Unterer Preis", 0.0001, value=default_price*0.8, format="%.4f")
+#                bot_params["lower_price"] = st.number_input("Unterer Preis", 0.0001, value=default_price*0.8, format="%.4f")
+                bot_params["lower_price"] = st.number_input("Unterer Preis", 0.0001, value=90000.0, format="%.4f")
             with col2:
-                bot_params["upper_price"] = st.number_input("Oberer Preis", 0.0001, value=default_price*1.2, format="%.4f")
+#                bot_params["upper_price"] = st.number_input("Oberer Preis", 0.0001, value=default_price*1.2, format="%.4f")
+                bot_params["upper_price"] = st.number_input("Oberer Preis", 0.0001, value=130000.0, format="%.4f")
 
             bot_params["num_grids"] = st.slider("Anzahl Grids", 2, 100, 20)
             bot_params["grid_mode"] = st.radio("Grid Modus", ["arithmetic", "geometric"], index=0)
@@ -226,7 +228,10 @@ def display_bot_results(results, df=None):
         return
         
     st.subheader("Grid Bot Performance")
-    
+
+    if 'bot_version' in results:
+        st.caption(results['bot_version'])    
+
     # Metrics - First Row
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Initial Investment", f"{results.get('initial_investment', 0):,.2f} USDT")
@@ -288,7 +293,8 @@ def display_bot_results(results, df=None):
             
             # Format numeric columns
             styled_df = trade_df.style.format({
-                'price': '{:,.4f}',
+                'cprice': '{:,.2f}',
+                'price': '{:,.2f}',
                 'amount': '{:.8f}',
                 'fee': '{:.4f}',
                 'profit': '{:.2f}' if 'profit' in trade_df.columns else None
@@ -306,7 +312,8 @@ def display_bot_results(results, df=None):
                          column_config={
                              "timestamp": "Time",
                              "type": "Type",
-                             "price": st.column_config.NumberColumn("Price", format="%.4f"),
+                             "cprice": st.column_config.NumberColumn("Trigger Price"),
+                             "price": st.column_config.NumberColumn("Grid Price"),
                              "amount": st.column_config.NumberColumn("Amount", format="%.8f"),
                              "fee": st.column_config.NumberColumn("Fee", format="%.4f"),
                              "profit": st.column_config.NumberColumn("Profit", format="%.2f"),
