@@ -28,7 +28,7 @@ if user_settings.get("use_simulated_data", False):
     )
     symbol = "SIM/BTC"
     interval = user_settings.get("simulation_interval", "1h")
-    st.subheader("Simulation Pattern Visualization")
+    st.subheader("Simulationsmuster")
     plot_simulation_pattern(df, user_settings["simulation_pattern"])
 else:
     coin = user_settings["coin"]
@@ -71,14 +71,7 @@ if user_settings["enable_bot"]:
         st.error(f"Grid-Berechnungsfehler → {e.__class__.__name__}: {e}")
 
 
-# Rest bleibt unverändert...
-trade_log = st.session_state.results.get("trade_log") if st.session_state.results else None
 
-render_chart_and_metrics(df, symbol, interval, 
-                         user_settings["chart_type"], 
-                         user_settings["show_volume"],
-                         grid_lines=grid_lines,
-                         trade_log=trade_log)
 
 # Settings change detection
 current_settings = {k: v for k, v in user_settings.items() if k != "bot_run_triggered"}
@@ -98,7 +91,8 @@ if user_settings["enable_bot"] and user_settings.get("bot_run_triggered", False)
                 upper_price=float(bot_params["upper_price"]),
                 num_grids=int(bot_params["num_grids"]),
                 grid_mode=str(bot_params["grid_mode"]),
-                fee_rate=float(bot_params["fee_rate"])
+                fee_rate=float(bot_params["fee_rate"]),
+                reserve_pct=float(bot_params["reserve_pct"])
             )
             if results.get("error"):
                 st.error(f"Simulationsfehler: {results['error']}")
@@ -108,5 +102,27 @@ if user_settings["enable_bot"] and user_settings.get("bot_run_triggered", False)
             st.error(f"Kritischer Fehler: {str(e)}")
 
 
+# Rest bleibt unverändert...
+trade_log = st.session_state.results.get("trade_log") if st.session_state.results else None
+
+# render_chart_and_metrics(df, symbol, interval, 
+#                          user_settings["chart_type"], 
+#                          user_settings["show_volume"],
+#                          grid_lines=grid_lines,
+#                          trade_log=trade_log)
+
+render_chart_and_metrics(
+    df,
+    symbol,
+    interval,
+    user_settings["chart_type"],
+    user_settings["show_volume"],
+    grid_lines=grid_lines,
+    trade_log=trade_log,
+    show_grid_lines=user_settings.get("show_grid_lines", False)
+)
+
+
 if st.session_state.results:
     display_bot_results(st.session_state.results, df)
+

@@ -13,9 +13,14 @@ def get_user_settings():
 
         st.subheader("Daten auswählen")
                 
+        # Simulation toggle
+        # Logik: Use Simulated Data – wird hier ausgewertet, aber nicht sichtbar
+        #st.sidebar.checkbox("Use Simulated Data", value=False, key="sim_toggle", label_visibility="collapsed")
+
         # use_simulated = st.session_state.get("sim_toggle", False)
         use_simulated = st.checkbox("Simulationsdaten verwenden", False, key="sim_toggle")
-        
+        # use_simulated = st.session_state.get("sim_toggle", False)
+
         if use_simulated:
             st.subheader("Simulationsparameter")
 
@@ -30,6 +35,12 @@ def get_user_settings():
             }
             label = st.selectbox("Kursverlauf", list(patterns.keys()), index=0)
             pattern = patterns[label]  # ← liefert intern z. B. "linear_up"
+
+            # pattern = st.selectbox("Kursverlauf", 
+            #                       ["linear_up", "linear_down", "sine", "range_bound", 
+            #                        "breakout", "volatile", "mean_reverting"],
+            #                       index=0,
+            #                       key="sim_pattern")
 
             init_price = st.number_input("Startkurs (USDT)", 
                                         value=100000.0, 
@@ -46,6 +57,8 @@ def get_user_settings():
             start_date = st.date_input("Startdatum", today - timedelta(days=30))
             end_date = st.date_input("Enddatum", today)
             max_bars = st.slider("Anzahl Kerzen (10–1000)", 10, 1000, 1000)
+
+        #st.checkbox("Use Simulated Data", key="sim_toggle")
 
         # Common settings (both simulated and real data)
         st.subheader("Chart Einstellungen")
@@ -137,11 +150,39 @@ def get_user_settings():
             reserve_pct = st.number_input("Betrag reserviert für Gebühren (%)", min_value=0.0, max_value=20.0, value=3.0, step=0.5, key="reserve_pct") / 100.0
             bot_params["reserve_pct"] = reserve_pct
 
+
+            # Show fee reserves - alt 
+            # reserve_usdt = bot_params["total_investment"] * 0.01
+            # st.markdown(f"**Reservierte Gebühren (USDT)**: {reserve_usdt:.2f} USDT")
+            
+            # coin_display_name = "BTC" if use_simulated else coin
+            # if st.session_state.get("df") is not None and not st.session_state["df"].empty:
+            #     close_price = st.session_state["df"].iloc[0]["close"]
+            #     reserve_coin = (bot_params["total_investment"] * 0.02) / close_price
+            #     st.markdown(f"**Reservierte Gebühren (Coin)**: {reserve_coin:.4f} {coin_display_name}")
+            # else:
+            #     st.markdown("**Reservierte Gebühren (Coin)**: wird berechnet, sobald Daten geladen sind")
+
+
            # Show fee reserves - neu
+ 
             reserve_usdt = bot_params["total_investment"] * (bot_params["reserve_pct"] * 1/3)
             reserve_coin_value = bot_params["total_investment"] * (bot_params["reserve_pct"] * 2/3)
+
+            # if st.session_state.get("df") is not None and not st.session_state["df"].empty:
+            #     close_price = st.session_state["df"].iloc[0]["close"]
+            #     reserve_coin = reserve_coin_value / close_price
+            #     st.markdown(f"**Reservierte Gebühren (USDT)**: {reserve_usdt:.2f} USDT")
+            #     st.markdown(f"**Reservierte Gebühren (COIN)**: {reserve_coin:.4f} COIN")
+            # else:
+            #     st.markdown(f"**Reservierte Gebühren (USDT)**: {reserve_usdt:.2f} USDT")
+            #     st.markdown("**Reservierte Gebühren (COIN)**: wird berechnet, sobald Daten geladen sind")
+
             if st.button("Grid Bot starten"):
                 bot_run_triggered = True
+
+    #jetzt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    #version_placeholder.caption(f"ui.py – v20 – Stand: {jetzt}")
 
     # Return settings based on mode
     if use_simulated:

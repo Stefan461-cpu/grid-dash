@@ -1,11 +1,10 @@
-# bot.py - Version 25 (Natürliche Intelligenz unterstützt von ChatGPT)
+# bot.py - Version 26 (Natürliche Intelligenz unterstützt von ChatGPT)
 # Basierend auf der Variablen coin_reserved. Dies soll eliminiert werden. --> erledigt 
-# Bot Logik Fehler: Mitunter Kauf, statt Verkauf. Frage: Wird das Grid vor jedem Trade aktualisiert?
-# Korrekturen: Das Grid wird für jede Candle aktualisiert, bevor Trades ausgeführt werden.
-# Einführung eines Grid-Status blocked, um zu verhindern, dass ein Grid mehrfach pro Candle gehandelt wird.
+# Bot Logik Fehler: Mitunter Kauf, statt Verkauf. Frage: Wird das Grid vor jedem Trade aktualisiert? --> erledigt
+# Korrekturen: Das Grid wird für jede Candle aktualisiert, bevor Trades ausgeführt werden --> erledigt
+# Einführung eines Grid-Status blocked, um zu verhindern, dass ein Grid mehrfach pro Candle gehandelt wird. --> erledigt
 # Diese Version enthält umfassende Fehlerbehandlung und eine verbesserte Logik für die Grid-Berechnung.
 # Versionierung: BOT_VERSION wird automatisch mit dem aktuellen Datum und Uhrzeit aktualisiert.
-# Diese Version ist für die Verwendung in der Grid-Dash App optimiert.
 # Diese Version ist halbwegs stabil, aber es gibt noch einige Optimierungen und Tests, die durchgeführt werden müssen.
 # Auch gibt es Fehlermeldungen auf der Webseite, die mitunter auftreten können.
 
@@ -14,15 +13,18 @@
 # - last_traded_price: Der Preis, zu dem der letzte Trade ausgeführt wurde (für die Trade-Logik).
 # Diese Unterscheidung ist wichtig, um zu verhindern, dass ein Trade am exakten Preis ausgeführt wird, 
 # was zu unerwünschten Effekten führen kann.
+#  
 # initial_price: Muss überarbeitet werden, es ist nicht einfach das mittlere
 # Grid-Level, sondern der Preis der ersten Kerze.
 # initial_coin muss ebenfalls überarbeitet werden, da es nicht einfach 50% des Investments sind,
 # sondern proportional zur Anzahl Grids oberhalb von initial_price.
-# Grid-Linien werden noch nicht angezeigt.
+# Grid-Linien werden noch nicht angezeigt und Trading-Pfeile falsch. --> erledigt
 # Trick, um mehr Vergangenheitsdaten zu erhalten (...).
-# Berechnung ist ineffizient. Prüfen, ob diese lineare Interpolation nötig ist. 
+# Berechnung ist ineffizient. Prüfen, ob diese lineare Interpolation nötig ist. --> Interpolation gelöscht
 # Prüfen, ob das Accounting von Gebühren und Profit korrekt ist.
 # Design des Dashboards anhand von Bitget und Binance.
+# Verhalten, wenn der Kurs das Grid überschreitet, muss noch getestet werden. --> scheint zu stimmen
+# Initiale Verteillogik; Reservierte Gebühren; Vorsicht, dass das Geld nicht ausgeht. 
 
 
 import numpy as np
@@ -34,7 +36,7 @@ from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
 # Versionierung mit aktuellem Datum und Uhrzeit
-BOT_VERSION = f"bot.py – Version 25 – Stand: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+BOT_VERSION = f"bot.py, v26, {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
 
 
 @dataclass
@@ -46,14 +48,17 @@ class GridState:
     trade_count: int = 0
 
 class GridBot:
+       
     def __init__(self, 
-                total_investment: float,
-                lower_price: float,
-                upper_price: float,
-                num_grids: int,
-                grid_mode: str = 'geometric',
-                fee_rate: float = 0.001,
-                initial_price: Optional[float] = None):
+        total_investment: float,
+        lower_price: float,
+        upper_price: float,
+        num_grids: int,
+        grid_mode: str = 'geometric',
+        fee_rate: float = 0.001,
+        initial_price: Optional[float] = None,
+        reserve_pct: float = 0.03):   # ← am Ende!
+
         
         self._validate_inputs(total_investment, lower_price, upper_price, num_grids, fee_rate)
         
@@ -70,7 +75,11 @@ class GridBot:
         self.coin_inventory: List[Tuple[float, float, pd.Timestamp]] = []
         
         # Calculate base USDT amount per grid (99% of total investment)
-        self.base_amount_usdt = (total_investment * 0.99) / num_grids
+        # self.base_amount_usdt = (total_investment * 0.99) / num_grids
+        effective_investment = total_investment * (1 - reserve_pct)
+        self.base_amount_usdt = effective_investment / (num_grids + 1)
+
+
         self._initialize_grids(total_investment, initial_price)
 
     def _validate_inputs(self, total_investment: float, lower_price: float,
@@ -119,14 +128,38 @@ class GridBot:
             initial_price = self.grid_lines[len(self.grid_lines) // 2]
         
         # 1. Immediate coin purchase at initial price (50% of capital)
-        initial_investment = total_investment * 0.5
+        # initial_investment = total_investment * 0.5
+        
+        # initial_investment entspricht den Anteil der Grids oberhalb des initialen Preises
+
+        # Zähle Grids über und unter dem initial_price
+        num_sell_grids = len([price for price in self.grid_lines if price > initial_price])
+        num_buy_grids  = len([price for price in self.grid_lines if price < initial_price])
+        num_total_grids = len(self.grid_lines)
+
+        # Anteil der Sell-Grids an allen Grids (ohne blocked)
+        sell_ratio = num_sell_grids / (num_total_grids)  # -1 wegen des 'blocked' Grids brauchts nicht
+        initial_investment = total_investment * 0.95 * sell_ratio
+        print(f"DEBUG: initital_investment={initial_investment}")
+
         self.initial_coin = initial_investment / (initial_price * (1 + self.fee_rate))
         fee = self.initial_coin * initial_price * self.fee_rate
         
         self.position['usdt'] -= (self.initial_coin * initial_price) + fee
         self.position['coin'] += self.initial_coin
         self.coin_inventory.append((self.initial_coin, initial_price, pd.Timestamp.now()))
-        print(f"initialize_grids 1.Teil")
+
+        self.trade_log.append({
+            'timestamp': pd.to_datetime("now"),  # wird später ersetzt beim Aufruf
+            'type': 'Initial BUY',
+            'cprice': initial_price,       # Marktpreis beim Kauf
+            'price': initial_price,        # Kaufpreis = Grid-unabhängig
+            'amount': self.initial_coin,
+            'fee': fee,
+            'profit': 0.0                  # kein realisierter Gewinn
+        })
+
+        #print(f"initialize_grids 1.Teil")
 
         # 2. Initialize all grids with fixed trade amounts
         for price in self.grid_lines:
@@ -153,8 +186,8 @@ class GridBot:
                     trade_amount=coin_amount
                 )
 
-            print(f"initialize_grids 2.Teil")
-            print(f"DEBUG (GridState): trade_amount={self.grids[price].trade_amount:.8f}")
+           #print(f"initialize_grids 2.Teil")
+           # print(f"DEBUG (GridState): trade_amount={self.grids[price].trade_amount:.8f}")
 
 
         
@@ -171,7 +204,7 @@ class GridBot:
                 self.grids[price].side = 'sell'
             elif price < current_price:
                 self.grids[price].side = 'buy'
-        print(f"update grid sides")
+        #print(f"update grid sides")
     
     def process_candle(self, candle: pd.Series):
         try:
@@ -190,28 +223,29 @@ class GridBot:
             #         continue  # Keine Trades beim exakten Preis
                
                 # Check price movements between grid levels
-            print(f"anfang candle processing")
-            for price in np.linspace(prev_price, current_price, 20):
-                for grid in self.grids.values():
-                    if ((prev_price < grid.price < current_price and grid.side == 'sell') or
-                        (prev_price > grid.price > current_price and grid.side == 'buy')):
-                        # if grid.price != getattr(self, 'last_traded_price', None):
-                        if grid.price != getattr(self, 'last_traded_price', None) and grid.price != current_price:  # ← NEU: zusätzliche Prüfung auf current_price
-                            print("\nIn process_candle1:")
-                            self._execute_trade(grid, candle)
-                            print("\nIn process_candle2:")
-                            print(f"DEBUG-candle: prev_price = {prev_price:.2f}, grid.price = {grid.price:.2f}, current_price = {current_price:.2f}, grid.side = {grid.side}")
-                            # self.grids[grid.price].side = 'blocked'  # Blocked grid remains unchanged
-                            #self.grids[price].side = 'blocked'
-                            grid.side = 'blocked'  # Blocked grid remains unchanged
-                            #self.grids[price].side = 'blocked'
 
-                            print("\nIn process_candle3:")
-                            # 🔁 Direkt danach: alle Grids neu bewerten
-                            # self._update_grid_sides(grid.price)
+            #print(f"anfang candle processing")
+            # for price in np.linspace(prev_price, current_price, 20):
+            for grid in self.grids.values():
+                if ((prev_price < grid.price < current_price and grid.side == 'sell') or
+                    (prev_price > grid.price > current_price and grid.side == 'buy')):
+                    # if grid.price != getattr(self, 'last_traded_price', None):
+                    if grid.price != getattr(self, 'last_traded_price', None) and grid.price != current_price:  # ← NEU: zusätzliche Prüfung auf current_price
+                        #print("\nIn process_candle1:")
+                        self._execute_trade(grid, candle)
+                        #print("\nIn process_candle2:")
+                        #print(f"DEBUG-candle: prev_price = {prev_price:.2f}, grid.price = {grid.price:.2f}, current_price = {current_price:.2f}, grid.side = {grid.side}")
+                        # self.grids[grid.price].side = 'blocked'  # Blocked grid remains unchanged
+                        #self.grids[price].side = 'blocked'
+                        grid.side = 'blocked'  # Blocked grid remains unchanged
+                        #self.grids[price].side = 'blocked'
 
-                            self.last_price = current_price
-                            print("\nIn process_candle4:")
+                        #print("\nIn process_candle3:")
+                        # 🔁 Direkt danach: alle Grids neu bewerten
+                        # self._update_grid_sides(grid.price)
+
+                        self.last_price = current_price
+                        #print("\nIn process_candle4:")
 
         except Exception as e:
             raise RuntimeError(f"Candle processing error: {str(e)}")
@@ -225,8 +259,8 @@ class GridBot:
             if grid.side == 'sell':
                 # FIFO implementation - sell oldest coins first
                 remaining_amount = grid.trade_amount
-                print(f"DEBUG executetrade-sell: remainingamount = {remaining_amount:.2f}")
-                print(f"DEBUG executetrade-sell: gridtradeamount = {grid.trade_amount:.2f}")
+                #print(f"DEBUG executetrade-sell: remainingamount = {remaining_amount:.2f}")
+                #print(f"DEBUG executetrade-sell: gridtradeamount = {grid.trade_amount:.2f}")
                 
                 while remaining_amount > 0 and self.coin_inventory:
                     oldest_amount, oldest_price, oldest_time = self.coin_inventory[0]
@@ -285,7 +319,7 @@ class GridBot:
             
             self.last_traded_price = grid.price
             grid.trade_count += 1
-            print(f"DEBUG executetrade: grid.price = {grid.price:.2f}, tradecount = {grid.trade_count}")
+            #print(f"DEBUG executetrade: grid.price = {grid.price:.2f}, tradecount = {grid.trade_count}")
 
             
         except Exception as e:
@@ -297,7 +331,8 @@ def simulate_grid_bot(df: pd.DataFrame,
                      upper_price: float,
                      num_grids: int = 20,
                      grid_mode: str = 'geometric',
-                     fee_rate: float = 0.001) -> Dict:
+                     fee_rate: float = 0.001,
+                     reserve_pct: float = 0.03) -> Dict:
     """
     Simulates grid bot trading with:
     - FIFO profit calculation
@@ -306,8 +341,12 @@ def simulate_grid_bot(df: pd.DataFrame,
     """
     try:
         initial_price = float(df.iloc[0]['close'])
-        bot = GridBot(total_investment, lower_price, upper_price, num_grids, grid_mode, fee_rate, initial_price)
+        bot = GridBot(total_investment, lower_price, upper_price, num_grids, grid_mode, fee_rate, initial_price,reserve_pct=reserve_pct)
         
+        # Setze Timestamp für Initial-Kauf auf df.iloc[0]["timestamp"]
+        if bot.trade_log:
+            bot.trade_log[0]['timestamp'] = df.iloc[0]['timestamp']
+
         # for _, candle in df.iterrows():
         #     bot.process_candle(candle)
         # Die erste Kerze wird übersprungen, da sie zur Initialisierung verwendet wird
@@ -317,6 +356,7 @@ def simulate_grid_bot(df: pd.DataFrame,
         
         final_price = float(df.iloc[-1]['close'])
         final_value = bot.position['usdt'] + bot.position['coin'] * final_price
+        #reserve_pct = settings["bot_params"].get("reserve_pct", 0.03)
         
         # Calculate total profit (including unrealized)
         total_profit = final_value - total_investment
