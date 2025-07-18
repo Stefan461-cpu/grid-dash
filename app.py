@@ -64,8 +64,12 @@ if user_settings["enable_bot"]:
             grid_mode=str(bot_params["grid_mode"])
         )
         grid_lines = dummy_bot.grid_lines  # Zugriff auf berechnete Grid-Lines
+
+    # except Exception as e:
+    #     st.error(f"Grid-Berechnungsfehler: {str(e)}")
     except Exception as e:
-        st.error(f"Grid-Berechnungsfehler: {str(e)}")
+        st.error(f"Grid-Berechnungsfehler → {e.__class__.__name__}: {e}")
+
 
 # Rest bleibt unverändert...
 trade_log = st.session_state.results.get("trade_log") if st.session_state.results else None
@@ -102,6 +106,7 @@ if user_settings["enable_bot"] and user_settings.get("bot_run_triggered", False)
                 st.session_state.results = results
         except Exception as e:
             st.error(f"Kritischer Fehler: {str(e)}")
+
 
 if st.session_state.results:
     display_bot_results(st.session_state.results, df)

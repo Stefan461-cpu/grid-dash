@@ -67,7 +67,7 @@ def get_user_settings():
 #                bot_params["upper_price"] = st.number_input("Oberer Preis", 0.0001, value=default_price*1.2, format="%.4f")
                 bot_params["upper_price"] = st.number_input("Oberer Preis", 0.0001, value=130000.0, format="%.4f")
 
-            bot_params["num_grids"] = st.slider("Anzahl Grids", 2, 100, 20)
+            bot_params["num_grids"] = st.slider("Anzahl Grids", 2, 500, 20)
             bot_params["grid_mode"] = st.radio("Grid Modus", ["arithmetic", "geometric"], index=0)
             bot_params["fee_rate"] = st.number_input("Gebühren (%)", 0.0, value=0.1, step=0.01) / 100.0
 

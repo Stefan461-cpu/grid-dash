@@ -1,4 +1,4 @@
-# bot.py - Version 25 (Natürliche Intelligenz unterstützt von ChatGPT)
+# bot.py - Version 23 (Natürliche Intelligenz unterstützt von ChatGPT)
 # Basierend auf der Variablen coin_reserved. Dies soll eliminiert werden. --> erledigt 
 # Bot Logik Fehler: Mitunter Kauf, statt Verkauf. Frage: Wird das Grid vor jedem Trade aktualisiert?
 # Korrekturen: Das Grid wird für jede Candle aktualisiert, bevor Trades ausgeführt werden.
@@ -18,11 +18,6 @@
 # Grid-Level, sondern der Preis der ersten Kerze.
 # initial_coin muss ebenfalls überarbeitet werden, da es nicht einfach 50% des Investments sind,
 # sondern proportional zur Anzahl Grids oberhalb von initial_price.
-# Grid-Linien werden noch nicht angezeigt.
-# Trick, um mehr Vergangenheitsdaten zu erhalten (...).
-# Berechnung ist ineffizient. Prüfen, ob diese lineare Interpolation nötig ist. 
-# Prüfen, ob das Accounting von Gebühren und Profit korrekt ist.
-# Design des Dashboards anhand von Bitget und Binance.
 
 
 import numpy as np
@@ -34,7 +29,7 @@ from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
 # Versionierung mit aktuellem Datum und Uhrzeit
-BOT_VERSION = f"bot.py – Version 25 – Stand: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+BOT_VERSION = f"bot.py – Version 23 – Stand: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
 
 
 @dataclass
@@ -101,14 +96,13 @@ class GridBot:
             lines = sorted([round(lower * (ratio ** i), 4) for i in range(num + 1)])
 
         # DEBUG: Ausgabe auf Streamlit-Webseite, falls aktiv
-        # try:
-        #      import streamlit as st
-        #      st.write("Berechnete Grid-Linien:", lines)
-        # except ImportError:
-        #      pass  # Kein Streamlit aktiv → ignoriere
+        try:
+             import streamlit as st
+             st.write("Berechnete Grid-Linien:", lines)
+        except ImportError:
+             pass  # Kein Streamlit aktiv → ignoriere
 
-        # print(f"GRID-MODE: {mode} | Grid Lines: {lines}")  # <<< DEBUG
-
+        print(f"GRID-MODE: {mode} | Grid Lines: {lines}")  # <<< DEBUG
         return lines
 
 
@@ -145,17 +139,8 @@ class GridBot:
                     side='buy',
                     trade_amount=coin_amount
                 )
-            elif price == initial_price:  # Blocked grid
-                coin_amount = self.base_amount_usdt / (price * (1 + self.fee_rate))
-                self.grids[price] = GridState(
-                    price=round(price, 4),
-                    side='blocked',
-                    trade_amount=coin_amount
-                )
-
             print(f"initialize_grids 2.Teil")
             print(f"DEBUG (GridState): trade_amount={self.grids[price].trade_amount:.8f}")
-
 
         
 
