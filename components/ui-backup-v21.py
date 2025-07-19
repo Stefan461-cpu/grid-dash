@@ -6,88 +6,15 @@ import pandas as pd
 from datetime import date, timedelta, datetime
 import plotly.graph_objects as go
 import numpy as np
-from services.bitget_api import fetch_bitget_candles
 
 def get_user_settings():
     with st.sidebar:
         #version_placeholder = st.sidebar.empty()
 
         st.subheader("Daten auswählen")
-              
+                
         # use_simulated = st.session_state.get("sim_toggle", False)
         use_simulated = st.checkbox("Simulationsdaten verwenden", False, key="sim_toggle")
-        
-        # Callback zum automatischen Laden bei Eingabe der Währung
-        def update_price_range():
-            coin = st.session_state.get("coin_input", "BTC")
-            symbol, df, error = fetch_bitget_candles(
-                coin=coin,
-                interval="1h",  # Default-Intervall für Erstabfrage
-                start_date=date.today() - timedelta(days=5),
-                end_date=date.today(),
-                max_bars=50
-            )
-            if error or df is None or df.empty:
-                st.session_state["close_price"] = 100000.0
-            else:
-                price = (df["close"].iloc[0] + df["close"].iloc[-1]) / 2
-                st.session_state["close_price"] = price
-                st.session_state["lower_price"] = round(price * 0.8, 2)
-                st.session_state["upper_price"] = round(price * 1.2, 2)
-
- 
-                # price = df.iloc[0]["close"]
-                # st.session_state["close_price"] = price
-                # st.session_state["lower_price"] = round(price * 0.8, 2)
-                # st.session_state["upper_price"] = round(price * 1.2, 2)
-
-            # Initialwerte (wenn noch nicht gesetzt)
-            if "lower_price" not in st.session_state:
-                st.session_state["lower_price"] = 90000.0
-            if "upper_price" not in st.session_state:
-                st.session_state["upper_price"] = 130000.0
-            if "close_price" not in st.session_state:
-                st.session_state["close_price"] = 100000.0
-
-            # # Eingabe der Währung (nur Anzeige hier)
-            # coin_display = st.session_state.get("coin_input", "BTC")
-
-            # # Preisbereichseingabe mit dynamischen Defaults
-            # default_lower = st.session_state.get("lower_price", 90000.0)
-            # default_upper = st.session_state.get("upper_price", 130000.0)
-
-            # col1, col2 = st.columns(2)
-            # with col1:
-            #     bot_params["lower_price"] = st.number_input(
-            #         "Unterer Preis", 0.0001, value=default_lower, format="%.4f"
-            #     )
-            # with col2:
-            #     bot_params["upper_price"] = st.number_input(
-            #         "Oberer Preis", 0.0001, value=default_upper, format="%.4f"
-            #     )
-
-
-            # Info-Label zum Kurs
-            if "df" in st.session_state and not st.session_state["df"].empty:
-                df = st.session_state["df"]
-                avg_price = (df["close"].iloc[0] + df["close"].iloc[-1]) / 2
-            else:
-                avg_price = st.session_state.get("close_price", 100000.0)  # fallback
-
-            price = st.session_state["df"]["close"].iloc[0]
-
-            if st.session_state.get("close_price"):
-                st.caption(
-                    f"💡 Voreingestellter Preisbereich (Unter-/Obergrenze) basiert auf einem Kurs von COIN +/- 20 % "
-                    f"({st.session_state['close_price']:,.2f} USDT)"
-#                    f"({st.session_state['close_price']:,.2f} USDT)"
-                )
-#                 st.caption(
-#                     f"💡 Voreingestellter Preisbereich (Unter-/Obergrenze) basiert auf dem Mittelwert aus Start- und Endkurs "
-#                     f"({avg_price:,.2f} USDT)"
-# )
-
-        
         
         if use_simulated:
             st.subheader("Simulationsparameter")
@@ -113,26 +40,7 @@ def get_user_settings():
         else:
             # Original market data inputs
             st.subheader("Marktdaten")
-            #coin = st.text_input("Währung (COIN in USDT)", value="BTC", placeholder="e. g. BTC or ETH")
-            
-            coin=st.selectbox(
-                "Währung (COIN in USDT)",
-                options=["BTC", "ETH", "SOL", "ADA", 
-                "AVAX", "BNB", "DOGE", "DOT", "ICP", "LINK", 
-                "LTC", "MATIC", "NEAR", "SHIB", "TON", "TRX", 
-                "UNI", "WBTC", "XRP", "XLM"],
-                index=0,
-                placeholder="Gib ein Symbol ein…",
-                key="coin_input",
-                on_change=update_price_range
-            )
-   
-            # coin = st.text_input(
-            #     "Währung (COIN in USDT)", 
-            #     value="BTC", 
-            #     key="coin_input", 
-            #     on_change=update_price_range
-            # )
+            coin = st.text_input("Währung (COIN in USDT)", value="BTC", placeholder="e. g. BTC or ETH")
             interval = st.radio("Intervall", ["1m", "5m", "15m", "1h", "4h", "1d"], horizontal=True, index=3)
             today = date.today()
             start_date = st.date_input("Startdatum", today - timedelta(days=30))
@@ -152,30 +60,6 @@ def get_user_settings():
         bot_run_triggered = False
 
         if enable_bot:
-            
-            # Dynamische Preisgrenzen – immer sichtbar
-            coin_display = st.session_state.get("coin_input", "BTC")
-            default_lower = st.session_state.get("lower_price", 90000.0)
-            default_upper = st.session_state.get("upper_price", 130000.0)
-
-            col1, col2 = st.columns(2)
-            with col1:
-                bot_params["lower_price"] = st.number_input(
-                    "Unterer Preis", 0.0001, value=default_lower, format="%.4f"
-                )
-            with col2:
-                bot_params["upper_price"] = st.number_input(
-                    "Oberer Preis", 0.0001, value=default_upper, format="%.4f"
-                )
-
-            if st.session_state.get("close_price"):
-                st.caption(
-                    f"💡 Voreingestellter Preisbereich basiert auf dem Kurs von COIN +/- 20 % "
-                    f"({st.session_state['close_price']:,.2f} USDT)"
-                )
-
-
-            
             # Default price setup
             default_price = None
             if "df" in st.session_state and not st.session_state["df"].empty:
@@ -185,11 +69,13 @@ def get_user_settings():
 
             bot_params["total_investment"] = st.number_input("Investitionsbetrag (USDT)", 10.0, value=10000.0, step=100.0)
             
-
-            
-
-
-
+            col1, col2 = st.columns(2)
+            with col1:
+                bot_params["lower_price"] = st.number_input("Unterer Preis", 0.0001, value=default_price*0.8, format="%.4f")
+#                bot_params["lower_price"] = st.number_input("Unterer Preis", 0.0001, value=90000.0, format="%.4f")
+            with col2:
+                bot_params["upper_price"] = st.number_input("Oberer Preis", 0.0001, value=default_price*1.2, format="%.4f")
+#                bot_params["upper_price"] = st.number_input("Oberer Preis", 0.0001, value=130000.0, format="%.4f")
 
             # bot_params["num_grids"] = st.slider("Anzahl Grids", 2, 500, 20)
 
@@ -467,9 +353,9 @@ def render_chart_and_metrics(df, symbol, interval, chart_type, show_volume,
                 st.subheader("📈 Hochgerechnete Volatilität")
                 col_vm, col_vm_coin, col_vy, col_vy_coin, col5 = st.columns(5)
                 col_vm.metric("Monatliche Vola (hist.)", f"{vola_month:,.2f} %")
-                col_vm_coin.metric("Monatlich Std Coin (USDT)", f"{(vola_month / 100 * latest['close']):,.2f} USDT")
+                col_vm_coin.metric("Monatlich Std Coin (USDT)", f"{(vola_month / 100 * latest['close']):,.0f} USDT")
                 col_vy.metric("Jährliche Vola (hist.)", f"{vola_year:,.2f} %")
-                col_vy_coin.metric("Jährlich Std Coin (USDT)", f"{(vola_year / 100 * latest['close']):,.2f} USDT")
+                col_vy_coin.metric("Jährlich Std Coin (USDT)", f"{(vola_year / 100 * latest['close']):,.0f} USDT")
 
 
     col1, col2, col3, col4 = st.columns(4)

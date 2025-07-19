@@ -1,4 +1,4 @@
-# ui.py Version 20
+# ui.py Version 21
 
 # components/ui.py
 import streamlit as st
@@ -6,23 +6,19 @@ import pandas as pd
 from datetime import date, timedelta, datetime
 import plotly.graph_objects as go
 import numpy as np
+from datetime import date, datetime, timedelta
+import streamlit as st
 from services.bitget_api import fetch_bitget_candles
+
 
 def get_user_settings():
     with st.sidebar:
-        #version_placeholder = st.sidebar.empty()
 
-        st.subheader("Daten auswählen")
-              
-        # use_simulated = st.session_state.get("sim_toggle", False)
-        use_simulated = st.checkbox("Simulationsdaten verwenden", False, key="sim_toggle")
-        
-        # Callback zum automatischen Laden bei Eingabe der Währung
         def update_price_range():
             coin = st.session_state.get("coin_input", "BTC")
             symbol, df, error = fetch_bitget_candles(
                 coin=coin,
-                interval="1h",  # Default-Intervall für Erstabfrage
+                interval="1h",
                 start_date=date.today() - timedelta(days=5),
                 end_date=date.today(),
                 max_bars=50
@@ -30,67 +26,29 @@ def get_user_settings():
             if error or df is None or df.empty:
                 st.session_state["close_price"] = 100000.0
             else:
-                price = (df["close"].iloc[0] + df["close"].iloc[-1]) / 2
+                price = df.iloc[0]["close"]
                 st.session_state["close_price"] = price
-                st.session_state["lower_price"] = round(price * 0.8, 2)
-                st.session_state["upper_price"] = round(price * 1.2, 2)
+                st.session_state["lower_price"] = round(price * 0.7, 2)
+                st.session_state["upper_price"] = round(price * 1.3, 2)
 
- 
-                # price = df.iloc[0]["close"]
-                # st.session_state["close_price"] = price
-                # st.session_state["lower_price"] = round(price * 0.8, 2)
-                # st.session_state["upper_price"] = round(price * 1.2, 2)
+        st.subheader("Einstellungen")
+        use_simulated = st.checkbox("Simulierte Kurse", False, key="sim_toggle")
 
-            # Initialwerte (wenn noch nicht gesetzt)
-            if "lower_price" not in st.session_state:
-                st.session_state["lower_price"] = 90000.0
-            if "upper_price" not in st.session_state:
-                st.session_state["upper_price"] = 130000.0
-            if "close_price" not in st.session_state:
-                st.session_state["close_price"] = 100000.0
-
-            # # Eingabe der Währung (nur Anzeige hier)
-            # coin_display = st.session_state.get("coin_input", "BTC")
-
-            # # Preisbereichseingabe mit dynamischen Defaults
-            # default_lower = st.session_state.get("lower_price", 90000.0)
-            # default_upper = st.session_state.get("upper_price", 130000.0)
-
-            # col1, col2 = st.columns(2)
-            # with col1:
-            #     bot_params["lower_price"] = st.number_input(
-            #         "Unterer Preis", 0.0001, value=default_lower, format="%.4f"
-            #     )
-            # with col2:
-            #     bot_params["upper_price"] = st.number_input(
-            #         "Oberer Preis", 0.0001, value=default_upper, format="%.4f"
-            #     )
-
-
-            # Info-Label zum Kurs
-            if "df" in st.session_state and not st.session_state["df"].empty:
-                df = st.session_state["df"]
-                avg_price = (df["close"].iloc[0] + df["close"].iloc[-1]) / 2
-            else:
-                avg_price = st.session_state.get("close_price", 100000.0)  # fallback
-
-            price = st.session_state["df"]["close"].iloc[0]
-
-            if st.session_state.get("close_price"):
-                st.caption(
-                    f"💡 Voreingestellter Preisbereich (Unter-/Obergrenze) basiert auf einem Kurs von COIN +/- 20 % "
-                    f"({st.session_state['close_price']:,.2f} USDT)"
-#                    f"({st.session_state['close_price']:,.2f} USDT)"
-                )
-#                 st.caption(
-#                     f"💡 Voreingestellter Preisbereich (Unter-/Obergrenze) basiert auf dem Mittelwert aus Start- und Endkurs "
-#                     f"({avg_price:,.2f} USDT)"
-# )
-
-        
-        
         if use_simulated:
             st.subheader("Simulationsparameter")
+            # pattern = st.selectbox(
+            #     "Kursverlauf",
+            #     [
+            #         "linear_up",
+            #         "linear_down",
+            #         "sine",
+            #         "range_bound",
+            #         "breakout",
+            #         "volatile",
+            #         "mean_reverting",
+            #     ],
+            #     index=0,
+            # )
 
             patterns = {
                 "Linear ansteigend": "linear_up",
@@ -104,160 +62,114 @@ def get_user_settings():
             label = st.selectbox("Kursverlauf", list(patterns.keys()), index=0)
             pattern = patterns[label]  # ← liefert intern z. B. "linear_up"
 
-            init_price = st.number_input("Startkurs (USDT)", 
-                                        value=100000.0, 
-                                        step=1000.0,
-                                        key="sim_init_price")
-            sim_days = st.slider("Anzahl Tage", 1, 30, 7, key="sim_days")
-            volatility = st.slider("Volatilität", 1000, 20000, 5000, key="sim_vol")
+            init_price = st.number_input("Initialer Preis (USDT)", value=100000.0)
+            sim_days = st.slider("Simulationszeitraum (Tage)", 1, 30, 7)
+            volatility = st.slider("Volatilität (in %)", 1000, 20000, 5000)
+            bot_run_triggered = st.button("Grid Bot starten")
+
+ 
+
         else:
-            # Original market data inputs
             st.subheader("Marktdaten")
-            #coin = st.text_input("Währung (COIN in USDT)", value="BTC", placeholder="e. g. BTC or ETH")
-            
-            coin=st.selectbox(
+            coin = st.text_input(
                 "Währung (COIN in USDT)",
-                options=["BTC", "ETH", "SOL", "ADA", 
-                "AVAX", "BNB", "DOGE", "DOT", "ICP", "LINK", 
-                "LTC", "MATIC", "NEAR", "SHIB", "TON", "TRX", 
-                "UNI", "WBTC", "XRP", "XLM"],
-                index=0,
-                placeholder="Gib ein Symbol ein…",
+                value="BTC",
                 key="coin_input",
                 on_change=update_price_range
             )
-   
-            # coin = st.text_input(
-            #     "Währung (COIN in USDT)", 
-            #     value="BTC", 
-            #     key="coin_input", 
-            #     on_change=update_price_range
-            # )
             interval = st.radio("Intervall", ["1m", "5m", "15m", "1h", "4h", "1d"], horizontal=True, index=3)
-            today = date.today()
-            start_date = st.date_input("Startdatum", today - timedelta(days=30))
-            end_date = st.date_input("Enddatum", today)
-            max_bars = st.slider("Anzahl Kerzen (10–1000)", 10, 1000, 1000)
+            start_date = st.date_input("Startdatum", value=date.today() - timedelta(days=30))
+            end_date = st.date_input("Enddatum", value=date.today())
+            max_bars = st.slider("Maximale Anzahl Kerzen", min_value=100, max_value=2000, value=1000)
 
-        # Common settings (both simulated and real data)
-        st.subheader("Chart Einstellungen")
-        chart_type = st.selectbox("Chart Typ", ["Candlestick", "Linie"], index=0)
-        show_volume = st.checkbox("Volumen anzeigen", True)
-        show_grid_lines = st.checkbox("Gridbereich anzeigen", False)  # NEW: Grid toggle
-        
-        # Grid bot settings
-        st.subheader("Grid Bot Parameter")
-        enable_bot = st.checkbox("Grid Bot aktivieren", True)
-        bot_params = {}
-        bot_run_triggered = False
+            st.subheader("Chart Settings")
+            chart_type = st.selectbox("Chart-Typ", ["Candlestick", "Linie"], index=0)
+            show_volume = st.checkbox("Volumen anzeigen", True)
+            show_grid_lines = st.checkbox("Gridbereich anzeigen", False)
 
-        if enable_bot:
-            
-            # Dynamische Preisgrenzen – immer sichtbar
-            coin_display = st.session_state.get("coin_input", "BTC")
-            default_lower = st.session_state.get("lower_price", 90000.0)
-            default_upper = st.session_state.get("upper_price", 130000.0)
+            st.subheader("Grid Bot Parameter")
+            enable_bot = st.checkbox("Grid Bot aktivieren", value=True)
+            bot_params = {}
+            bot_run_triggered = False
 
-            col1, col2 = st.columns(2)
-            with col1:
-                bot_params["lower_price"] = st.number_input(
-                    "Unterer Preis", 0.0001, value=default_lower, format="%.4f"
-                )
-            with col2:
-                bot_params["upper_price"] = st.number_input(
-                    "Oberer Preis", 0.0001, value=default_upper, format="%.4f"
-                )
+            if enable_bot:
+                bot_params["total_investment"] = st.number_input("Investitionsbetrag (USDT)", 10.0, value=10000.0, step=100.0)
 
-            if st.session_state.get("close_price"):
+                if "close_price" not in st.session_state:
+                    st.session_state["close_price"] = 100000.0
+                if "lower_price" not in st.session_state:
+                    st.session_state["lower_price"] = 90000.0
+                if "upper_price" not in st.session_state:
+                    st.session_state["upper_price"] = 130000.0
+
+                col1, col2 = st.columns(2)
+                with col1:
+                    bot_params["lower_price"] = st.number_input(
+                        "Unterer Preis", 0.0001, format="%.4f", value=st.session_state["lower_price"]
+                    )
+                with col2:
+                    bot_params["upper_price"] = st.number_input(
+                        "Oberer Preis", 0.0001, format="%.4f", value=st.session_state["upper_price"]
+                    )
+
                 st.caption(
-                    f"💡 Voreingestellter Preisbereich basiert auf dem Kurs von COIN +/- 20 % "
+                    f"💡 Preisbereich basiert auf Kurs von {st.session_state['coin_input'].upper()} "
                     f"({st.session_state['close_price']:,.2f} USDT)"
                 )
 
+                if "num_grids" not in st.session_state:
+                    st.session_state.num_grids = 20
 
-            
-            # Default price setup
-            default_price = None
-            if "df" in st.session_state and not st.session_state["df"].empty:
-                default_price = st.session_state["df"].iloc[0]["close"]
-            else:
-                default_price = 100000.0
+                def update_from_slider():
+                    st.session_state.num_grids = st.session_state.slider_value
 
-            bot_params["total_investment"] = st.number_input("Investitionsbetrag (USDT)", 10.0, value=10000.0, step=100.0)
-            
+                def update_from_number():
+                    st.session_state.num_grids = st.session_state.number_value
 
-            
+                st.slider(
+                    "Anzahl Grids – wähle einen Wert",
+                    min_value=2, max_value=500,
+                    key="slider_value",
+                    value=st.session_state.num_grids,
+                    on_change=update_from_slider
+                )
+                st.number_input(
+                    "Oder gib den Wert direkt ein",
+                    min_value=2, max_value=500,
+                    key="number_value",
+                    value=st.session_state.num_grids,
+                    on_change=update_from_number
+                )
 
+                bot_params["num_grids"] = st.session_state.num_grids
 
+                grid_modes = {
+                    "Arithmetisch (gleichmäßige Abstände)": "arithmetic",
+                    "Geometrisch (prozentuale Abstände)": "geometric"
+                }
+                grid_mode_label = st.radio("Grid Modus", list(grid_modes.keys()), index=0)
+                bot_params["grid_mode"] = grid_modes[grid_mode_label]
 
+                bot_params["fee_rate"] = st.number_input("Handelsgebühren (%)", 0.0, value=0.1, step=0.01) / 100.0
+                reserve_pct = st.number_input("Betrag reserviert für Gebühren (%)", min_value=0.0, max_value=20.0, value=3.0, step=0.5, key="reserve_pct") / 100.0
+                bot_params["reserve_pct"] = reserve_pct
 
-            # bot_params["num_grids"] = st.slider("Anzahl Grids", 2, 500, 20)
+                reserve_usdt = bot_params["total_investment"] * (reserve_pct * 1 / 3)
+                reserve_coin_value = bot_params["total_investment"] * (reserve_pct * 2 / 3)
+                if "close_price" in st.session_state:
+                    reserve_coin = reserve_coin_value / st.session_state["close_price"]
+                    st.markdown(f"**Reservierte Gebühren (USDT):** {reserve_usdt:.2f} USDT")
+                    st.markdown(f"**Reservierte Gebühren (Coin):** {reserve_coin:.4f} {st.session_state['coin_input'].upper()}")
+                else:
+                    st.markdown(f"**Reservierte Gebühren (USDT):** {reserve_usdt:.2f} USDT")
+                    st.markdown("**Reservierte Gebühren (Coin):** wird berechnet, sobald Daten geladen sind")
 
-            # # Zwei Optionen anzeigen
-            # slider_value = st.slider("Anzahl Grids - Wähle einen Wert", min_value=2, max_value=500, value=20)
-            # number_value = st.number_input("Oder gib den Wert direkt ein", min_value=2, max_value=500, value=slider_value)
+                if st.button("Grid Bot starten"):
+                    bot_run_triggered = True
 
-            # # Synchronisieren: wenn sich eines ändert, überschreibt es das andere
-            # final_value = number_value if number_value != slider_value else slider_value
-            # bot_params["num_grids"] = final_value
+            jetzt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            st.caption(f"ui.py – v20 – Stand: {jetzt}")
 
-            #st.write(f"Verwendeter Wert: {final_value}")
-
-            # Eingabe Anzahl Grids mit Slider und Number Input - bidirektionales Update
-
-            # st.subheader("Anzahl Grids")
-            # Initialwerte setzen (nur beim ersten Lauf)
-            if "num_grids" not in st.session_state:
-                st.session_state.num_grids = 20
-
-            # Callback-Funktionen definieren
-            def update_from_slider():
-                st.session_state.num_grids = st.session_state.slider_value
-
-            def update_from_number():
-                st.session_state.num_grids = st.session_state.number_value
-
-            # Slider mit Callback
-            st.slider(
-                "Anzahl Grids – wähle einen Wert",
-                min_value=2, max_value=500,
-                key="slider_value",
-                value=st.session_state.num_grids,
-                on_change=update_from_slider
-            )
-
-            # Number Input mit Callback
-            st.number_input(
-                "Oder gib den Wert direkt ein",
-                min_value=2, max_value=500,
-                key="number_value",
-                value=st.session_state.num_grids,
-                on_change=update_from_number
-            )
-
-            # Endgültiger Wert
-            bot_params["num_grids"] = st.session_state.num_grids
-
-            grid_modes = {
-                "Arithmetisch (gleichmäßige Abstände)": "arithmetic",
-                "Geometrisch (prozentuale Abstände)": "geometric"
-            }
-
-            grid_mode_label = st.radio("Grid Modus", list(grid_modes.keys()), index=0)
-            bot_params["grid_mode"] = grid_modes[grid_mode_label]
-
-            bot_params["fee_rate"] = st.number_input("Handelsgebühren (%)", 0.0, value=0.1, step=0.01) / 100.0
-
-            reserve_pct = st.number_input("Betrag reserviert für Gebühren (%)", min_value=0.0, max_value=20.0, value=3.0, step=0.5, key="reserve_pct") / 100.0
-            bot_params["reserve_pct"] = reserve_pct
-
-           # Show fee reserves - neu
-            reserve_usdt = bot_params["total_investment"] * (bot_params["reserve_pct"] * 1/3)
-            reserve_coin_value = bot_params["total_investment"] * (bot_params["reserve_pct"] * 2/3)
-            if st.button("Grid Bot starten"):
-                bot_run_triggered = True
-
-    # Return settings based on mode
     if use_simulated:
         return {
             "use_simulated_data": True,
@@ -286,6 +198,7 @@ def get_user_settings():
             "bot_params": bot_params,
             "bot_run_triggered": bot_run_triggered
         }
+
 
 
 def calculate_annualized_volatility(df, interval):
@@ -467,9 +380,9 @@ def render_chart_and_metrics(df, symbol, interval, chart_type, show_volume,
                 st.subheader("📈 Hochgerechnete Volatilität")
                 col_vm, col_vm_coin, col_vy, col_vy_coin, col5 = st.columns(5)
                 col_vm.metric("Monatliche Vola (hist.)", f"{vola_month:,.2f} %")
-                col_vm_coin.metric("Monatlich Std Coin (USDT)", f"{(vola_month / 100 * latest['close']):,.2f} USDT")
+                col_vm_coin.metric("Monatlich Std Coin (USDT)", f"{(vola_month / 100 * latest['close']):,.0f} USDT")
                 col_vy.metric("Jährliche Vola (hist.)", f"{vola_year:,.2f} %")
-                col_vy_coin.metric("Jährlich Std Coin (USDT)", f"{(vola_year / 100 * latest['close']):,.2f} USDT")
+                col_vy_coin.metric("Jährlich Std Coin (USDT)", f"{(vola_year / 100 * latest['close']):,.0f} USDT")
 
 
     col1, col2, col3, col4 = st.columns(4)
