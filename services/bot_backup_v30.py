@@ -1,4 +1,4 @@
-# bot.py - Version 27 (Natürliche Intelligenz unterstützt von ChatGPT)
+# bot.py - Version 30 (Natürliche Intelligenz unterstützt von ChatGPT)
 # Basierend auf der Variablen coin_reserved. Dies soll eliminiert werden. --> erledigt 
 # Bot Logik Fehler: Mitunter Kauf, statt Verkauf. Frage: Wird das Grid vor jedem Trade aktualisiert? --> erledigt
 # Korrekturen: Das Grid wird für jede Candle aktualisiert, bevor Trades ausgeführt werden --> erledigt
@@ -36,7 +36,7 @@ from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 
 # Versionierung mit aktuellem Datum und Uhrzeit
-BOT_VERSION = f"bot.py, v27, {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+BOT_VERSION = f"bot.py, v30, {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
 
 
 @dataclass

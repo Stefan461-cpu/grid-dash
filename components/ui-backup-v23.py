@@ -1,4 +1,4 @@
-# ui.py Version 30
+# ui.py Version 23
 
 # components/ui.py
 import streamlit as st
@@ -15,9 +15,7 @@ def get_user_settings():
         st.subheader("Daten auswählen")
               
         # use_simulated = st.session_state.get("sim_toggle", False)
-        # Synthetische Simulationsdaten sind aktuell deaktiviert - nicht mehr in der Sidebar
-        # Da nicht klar, ob der Bot darauf funktioniert
-        use_simulated = st.checkbox("Simulationsdaten verwenden", False, key="sim_toggle",disabled=True)
+        use_simulated = st.checkbox("Simulationsdaten verwenden", False, key="sim_toggle")
         
         # Callback zum automatischen Laden bei Eingabe der Währung
         def update_price_range():
@@ -78,13 +76,13 @@ def get_user_settings():
 
             price = st.session_state["df"]["close"].iloc[0]
 
-#             if st.session_state.get("close_price"):
+            if st.session_state.get("close_price"):
+                st.caption(
+                    f"💡 Voreingestellter Preisbereich (Unter-/Obergrenze) basiert auf einem Kurs von COIN +/- 20 % "
+                    f"({st.session_state['close_price']:,.2f} USDT)"
+#                    f"({st.session_state['close_price']:,.2f} USDT)"
+                )
 #                 st.caption(
-#                     f"💡 Voreingestellter Preisbereich (Unter-/Obergrenze) basiert auf einem Kurs von COIN +/- 20 % "
-#                     f"({st.session_state['close_price']:,.2f} USDT)"
-# #                    f"({st.session_state['close_price']:,.2f} USDT)"
-#                 )
-# #                 st.caption(
 #                     f"💡 Voreingestellter Preisbereich (Unter-/Obergrenze) basiert auf dem Mittelwert aus Start- und Endkurs "
 #                     f"({avg_price:,.2f} USDT)"
 # )
@@ -178,15 +176,21 @@ def get_user_settings():
 
 
             
-            # # Default price setup
-            # default_price = None
-            # if "df" in st.session_state and not st.session_state["df"].empty:
-            #     default_price = st.session_state["df"].iloc[0]["close"]
-            # else:
-            #     default_price = 100000.0
+            # Default price setup
+            default_price = None
+            if "df" in st.session_state and not st.session_state["df"].empty:
+                default_price = st.session_state["df"].iloc[0]["close"]
+            else:
+                default_price = 100000.0
 
-            # bot_params["total_investment"] = st.number_input("Investitionsbetrag (USDT)", 10.0, value=10000.0, step=100.0)
- 
+            bot_params["total_investment"] = st.number_input("Investitionsbetrag (USDT)", 10.0, value=10000.0, step=100.0)
+            
+
+            
+
+
+
+
             # bot_params["num_grids"] = st.slider("Anzahl Grids", 2, 500, 20)
 
             # # Zwei Optionen anzeigen
@@ -234,10 +238,6 @@ def get_user_settings():
             # Endgültiger Wert
             bot_params["num_grids"] = st.session_state.num_grids
 
-
-
-
-
             grid_modes = {
                 "Arithmetisch (gleichmäßige Abstände)": "arithmetic",
                 "Geometrisch (prozentuale Abstände)": "geometric"
@@ -250,103 +250,7 @@ def get_user_settings():
 
             reserve_pct = st.number_input("Betrag reserviert für Gebühren (%)", min_value=0.0, max_value=20.0, value=3.0, step=0.5, key="reserve_pct") / 100.0
             bot_params["reserve_pct"] = reserve_pct
-#            fee_rate = bot_params["fee_rate"]
 
-            reserve_pct = bot_params.get("reserve_pct", 0.03)
-            fee_rate = bot_params.get("fee_rate", 0.001)
-            mode = bot_params.get("grid_mode", "arithmetic")
-            lower_price = bot_params.get("lower_price", 0)
-            upper_price = bot_params.get("upper_price", 0)
-            num_grids = bot_params.get("num_grids", 1)
-
-            grid_range = ""
-
-            if lower_price > 0 and num_grids > 0 and upper_price > lower_price:
-                if mode == "arithmetic":
-                    grid_step = (upper_price - lower_price) / num_grids
-
-                    # unterstes Grid
-                    buy_low = lower_price
-                    sell_low = lower_price + grid_step
-                    raw_low = (sell_low - buy_low) / buy_low
-                    net_low = (raw_low * (1 - reserve_pct) - 2 * fee_rate) * 100
-
-                    # oberstes Grid
-                    sell_high = upper_price
-                    buy_high = upper_price - grid_step
-                    raw_high = (sell_high - buy_high) / buy_high
-                    net_high = (raw_high * (1 - reserve_pct) - 2 * fee_rate) * 100
-                    st.session_state["net_grid_profit_pct"] = (net_high + net_low)/2
-
-                    grid_range = f"{net_low:.2f} % – {net_high:.2f} %"
-                elif mode == "geometric":
-                    raw = (upper_price / lower_price) ** (1 / num_grids) - 1
-                    net = (raw * (1 - reserve_pct) - 2 * fee_rate) * 100
-                    st.session_state["net_grid_profit_pct"] = net
-
-                    grid_range = f"{net:.2f} %"
-
-
-
-
-            #reserve_pct = bot_params.get("reserve_pct", 0.03)
-
-            # grid_profit_pct = 0
-            # net_grid_profit_pct = 0
-
-            # if bot_params["lower_price"] > 0 and bot_params["num_grids"] > 0:
-            #     if bot_params["grid_mode"] == "arithmetic":
-            #         raw_return = (bot_params["upper_price"] - bot_params["lower_price"]) / bot_params["num_grids"]
-            #         raw_grid_pct = raw_return / bot_params["lower_price"]
-            #     elif bot_params["grid_mode"] == "geometric":
-            #         raw_grid_pct = (bot_params["upper_price"] / bot_params["lower_price"]) ** (1 / bot_params["num_grids"]) - 1
-
-            #     # Bruttogewinn auf 100 % bezogen (ohne Fees)
-            #     grid_profit_pct = raw_grid_pct * (1 - reserve_pct) * 100
-
-            #     # Nettogewinn nach Trading-Fees (doppelt pro Grid)
-            #     net_grid_profit_pct = (raw_grid_pct * (1 - reserve_pct) - 2 * fee_rate) * 100
-
-            # st.sidebar.markdown(f"""
-            # <div style='font-size: 0.875rem; line-height: 1.4; margin-top: 10px;'>
-            # <b>📈 Gewinn pro Grid (nach Fees):</b> 
-            # {grid_profit_pct:.2f} %
-            # </div>
-            # """, unsafe_allow_html=True)
- 
-            # Farb-/Symbol-Logik auf Basis der unteren Grenze
-            value_for_rating = net_low if mode == "arithmetic" else net
-            symbol = "⚠️"
-            color = "orange"
-
-            if value_for_rating >= 1.0:
-                color = "#00FF66"
-                symbol = "🔺"
-            elif value_for_rating < 0.3:
-                color = "#FF4D4D"
-                symbol = "🔻"
-
-            # Anzeige in der Sidebar
-            st.sidebar.markdown(f"""
-            <div style='font-size: 0.875rem; line-height: 1.4; margin-top: 10px; color: {color};'>
-            <b>{symbol} Gewinn pro Grid (nach Fees):</b><br>
-            {grid_range}
-            </div>
-            """, unsafe_allow_html=True)
- 
- 
- 
-            st.write("---")
-             # Default price setup
-            default_price = None
-            if "df" in st.session_state and not st.session_state["df"].empty:
-                default_price = st.session_state["df"].iloc[0]["close"]
-            else:
-                default_price = 100000.0
-
-            bot_params["total_investment"] = st.number_input("Investitionsbetrag (USDT)", 10.0, value=10000.0, step=100.0)
-
- 
            # Show fee reserves - neu
             reserve_usdt = bot_params["total_investment"] * (bot_params["reserve_pct"] * 1/3)
             reserve_coin_value = bot_params["total_investment"] * (bot_params["reserve_pct"] * 2/3)
@@ -430,7 +334,7 @@ def calculate_annualized_volatility(df, interval):
 #     </div>
 #     """, unsafe_allow_html=True)
 
-def render_colored_metric(col, label: str, value: float, unit: str = "%", override_color: str = None, precision: int = 2, highlight_background: str = None):
+def render_colored_metric(col, label: str, value: float, unit: str = "%", override_color: str = None):
     """
     Zeigt einen farbigen Metric-Wert im Stil von st.metric an – mit freier Farbe und exakt abgestimmtem Layout.
 
@@ -441,21 +345,18 @@ def render_colored_metric(col, label: str, value: float, unit: str = "%", overri
         unit:            Einheit für Anzeige (default: "%")
         override_color:  Optional: feste Farbe als CSS-Farbwert (z. B. "white", "#00FF00")
     """
-
-    # Textfarbe + Hintergrund
     farbe = override_color if override_color else ("#00FF00" if value >= 0 else "red")
-    background = f"background-color: {highlight_background}; padding: 4px 8px; border-radius: 6px;" if highlight_background else ""
 
     col.markdown(f"""
     <div style="font-size: 0.875rem; line-height: 1.7; font-weight: 410; color: #ffffff;">
         {label}
     </div>
-    <div style="font-size: 2.25rem; line-height: 1.35; font-weight: 450; color: {farbe}; {background}">
-        {value:.{precision}f} {unit}
+    <div style="font-size: 2.25rem; line-height: 1.35; font-weight: 450; color: {farbe};">
+        {value:,.2f} {unit}
     </div>
     """, unsafe_allow_html=True)
 
- 
+
 def render_chart_and_metrics(df, symbol, interval, chart_type, show_volume, 
                            grid_lines=None, trade_log=None, show_grid_lines=False,
                            daily_values=None):  # NEW: show_grid_lines param
@@ -715,10 +616,6 @@ def render_chart_and_metrics(df, symbol, interval, chart_type, show_volume,
         latest = df.iloc[-1]
         
         results = st.session_state.get("results")
-        buy_hold_return = None
-        bot_return = None
-        fee_ratio = None
-
         if results and df is not None and not df.empty:
             initial = results.get('initial_price', df.iloc[0]['close'])
             final = results.get('final_price', df.iloc[-1]['close'])
@@ -738,12 +635,10 @@ def render_chart_and_metrics(df, symbol, interval, chart_type, show_volume,
         # Farbliche Anzeige über delta
         #farbe = "green" if rendite > 0 else "red"
  
-        if buy_hold_return is not None:
-            render_colored_metric(col2, "Buy & Hold P/L", buy_hold_return)
-        if  maxmin is not None:
-            render_colored_metric(col4, "Max-Min im Sim-Intervall (USDT)", maxmin, "", override_color="white")
-        if maxmin_perc is not None:
-            render_colored_metric(col4, "Max-Min im Sim-Intervall (%)", maxmin_perc, override_color="white")
+        render_colored_metric(col2, "Buy & Hold P/L", buy_hold_return)
+ 
+        render_colored_metric(col4, "Max-Min im Sim-Intervall (USDT)", maxmin, "")
+        render_colored_metric(col4, "Max-Min im Sim-Intervall (%)", maxmin_perc)
         render_colored_metric(col3, "Max Sim-Intervall (USDT)", df['high'].max(), unit="", override_color="white")
         render_colored_metric(col3, "Min Sim-Intervall (USDT)", df['low'].min(), unit="", override_color="white")
 
@@ -861,7 +756,7 @@ def display_bot_results(results, df=None):
                f"{results.get('final_value', 0):,.2f}", 
                f"{results.get('profit_pct', 0):.2f}%")
     #col3.metric("Profit/Loss (USDT)", f"{results.get('profit_usdt', 0):,.2f}")
-    render_colored_metric(col3, "Total Net P/L (USDT)", results.get("profit_usdt", 0), "")
+    render_colored_metric(col3, "Grid P/L (USDT)", results.get("profit_usdt", 0), "")
 
     profit = results.get("profit_usdt", 0)
     capital = results.get("initial_capital", 1)  # Fallback 1 verhindert Division durch 0
@@ -869,7 +764,7 @@ def display_bot_results(results, df=None):
 
         # Simulation Verification
     if df is not None and not df.empty:
-    #    st.subheader("Performance Comparison")
+        st.subheader("Performance Comparison")
         
         # Calculate metrics
         initial = results.get('initial_price', df.iloc[0]['close'])
@@ -878,63 +773,28 @@ def display_bot_results(results, df=None):
         bot_return = results.get('profit_pct', 0)
         fee_ratio = results.get('fees_paid', 0) / results.get('initial_investment', 1) * 100
 
-    render_colored_metric(col4, "Total Net P/L (%)", rendite_prozent)
+    render_colored_metric(col4, "Grid P/L (%)", rendite_prozent)
 
-    # Zeitstempel als datetime sicherstellen
-    start_time = pd.to_datetime(df.iloc[0]['timestamp']) if 'timestamp' in df.columns else df.index[0]
-    end_time = pd.to_datetime(df.iloc[-1]['timestamp']) if 'timestamp' in df.columns else df.index[-1]
-
-    # Zeitraum in Jahren
-    duration_years = (end_time - start_time).days / 365.25
-
-    if duration_years > 0:
-        cagr = ((1+rendite_prozent/100) ** (1 / duration_years) - 1)  # Annualized return in percentage
-    else:
-        cagr = 0
-
-    # col5.metric("CAGR (%)", f"{cagr:,.2f} %")
-    #render_colored_metric(col5, "CAGR", cagr * 100, unit="%", precision=2, override_color="blue")
-    render_colored_metric(col5, "CAGR (%)", cagr * 100, unit="%", precision=2, override_color="#0B5E82", highlight_background="#BBBBBB")
+    #col5.metric("Summe Gebühren (USDT)", f"{results.get('fees_paid', 0):,.2f}")
+    render_colored_metric(col5, "Summe Trading Fees (USDT)", results.get("fees_paid", 0), unit="", override_color="white")
+    render_colored_metric(col5, "Fee Impact (%)", fee_ratio, unit="%", override_color="white")
 
     # Metrics - Second Row
     col6, col7, col8, col9, col10 = st.columns(5)
     #col6.metric("Number of Trades", results.get('num_trades', 0))
     
     # Handle average investment per grid with fallback
-    render_colored_metric(col10, "Summe Trading Fees (USDT)", results.get("fees_paid", 0), unit="", override_color="white")
-
- 
-    reserve_pct = results.get('reserve_pct', 0.03)
-    total_investment = results.get('initial_investment', 0)
-    investierbares_kapital = total_investment * (1 - reserve_pct)
-
-    grid_investment = results.get(
-        'average_investment_per_grid',
-        investierbares_kapital / len(results['grid_lines']) if 'grid_lines' in results else 0
-    )
-    col6.metric("Inv. Betrag pro Grid (USDT)", f"{grid_investment:,.2f}")
-
+    grid_investment = results.get('average_investment_per_grid', 
+                                results['initial_investment']/len(results['grid_lines']) 
+                                if 'grid_lines' in results else 0)
+    col6.metric("Avg. Investment/Grid", f"{grid_investment:,.2f} USDT")
+    
+    # col7.metric("Finale Position USDT", f"{results.get('final_position', {}).get('usdt', 0):,.2f}")
+    # col8.metric("Finale Position COIN", f"{results.get('final_position', {}).get('coin', 0):,.6f}")
 
     sell_trades = sum(1 for t in results.get('trade_log', []) if t['type'] == 'SELL')
- 
- 
-    col11, col12, col13,col14, col15 = st.columns(5)
-
-    render_colored_metric(col15, "Fee Impact (%)", fee_ratio, unit="%", override_color="white")
-    
-    net_grid_profit_pct = st.session_state.get("net_grid_profit_pct", 0)
-    render_colored_metric(col12, "(Avg.) Profit pro Grid (%)", net_grid_profit_pct, unit="%", override_color="white")
-    grid_profit_amount = grid_investment * (net_grid_profit_pct / 100.0)
-    render_colored_metric(col7, "(Avg.) Profit pro Grid (USDT)", grid_profit_amount, unit="USDT", override_color="white", precision=2)
-    grid_profit_total = grid_profit_amount * sell_trades
-    render_colored_metric(col8, "Grid Profit Total (USDT)", grid_profit_total, unit="")
-    grid_profit_pct = grid_profit_total / total_investment*100 if total_investment > 0 else 0
-    render_colored_metric(col9, "Grid Profit Total (%)", grid_profit_pct,precision=2)
-    floating_profit_total = results.get("profit_usdt", 0)- grid_profit_total
-    render_colored_metric(col13, "Floating Profit (USDT)", floating_profit_total,"")
-    floating_profit_pct = (floating_profit_total / total_investment * 100) if total_investment > 0 else 0
-    render_colored_metric(col14, "Floating Profit (%)", floating_profit_pct)
- 
+    #col9, col10, col11, col12 = st.columns(4)
+    #col9.metric("Number of SELL Trades", sell_trades)
 
     bot_settings = results.get("bot_params", {})
 
@@ -968,7 +828,7 @@ def display_bot_results(results, df=None):
             st.markdown(render_entry("Modus", mode), unsafe_allow_html=True)
             st.markdown(render_entry("Preis Range", f"{lower:.4f} – {upper:.4f} USDT"), unsafe_allow_html=True)
             st.markdown(render_entry("Anzahl Grids", num_grids), unsafe_allow_html=True)
-            st.markdown(render_entry("Profit pro Grid", f"{net_grid_profit_pct:.2f} %"), unsafe_allow_html=True)
+            st.markdown(render_entry("Profit pro Grid", "xxx%", color="#00FF66"), unsafe_allow_html=True)
             st.markdown(render_entry("Investierter Betrag", f"{results.get('initial_investment', 0):,.2f} USDT", color="white"), unsafe_allow_html=True)
  
         with col2:
@@ -1070,14 +930,14 @@ def display_bot_results(results, df=None):
                              "queue_size": "Inventory Slots"
                          })
 
-    #     test_total_fee = trade_df['fee'].sum() if 'fee' in trade_df.columns else 0.0
-    #     test_total_profit = trade_df['profit'].sum() if 'profit' in trade_df.columns else 0.0
+        test_total_fee = trade_df['fee'].sum() if 'fee' in trade_df.columns else 0.0
+        test_total_profit = trade_df['profit'].sum() if 'profit' in trade_df.columns else 0.0
 
-    # st.markdown(f"""
-    # ### 🧾 Gesamtübersicht
-    # - **Summe Gebühren:** {test_total_fee:,.4f} USDT  
-    # - **Summe Profit:** {test_total_profit:,.2f} USDT
-    # """)
+    st.markdown(f"""
+    ### 🧾 Gesamtübersicht
+    - **Summe Gebühren:** {test_total_fee:,.4f} USDT  
+    - **Summe Profit:** {test_total_profit:,.2f} USDT
+    """)
 
 
     # # Simulation Verification
@@ -1153,32 +1013,9 @@ def display_bot_results(results, df=None):
             st.write("Initial Price:", results['debug'].get('initial_price', 'N/A'))
             st.write("Final Price:", results['debug'].get('final_price', 'N/A'))
 
-    
-    st.markdown("""
-    <hr style='margin-top: 50px; margin-bottom: 10px;'>
-
-    <div style='font-size: 0.75rem; color: gray;'>
-    
-    Limitationen: <br>
-    Dieses Dashboard ist ein Prototyp. Alle Angaben ohne Gewähr. DYOR.<br>
-    Aktuell kann nur eine History von 1000 Kerzen angezeigt werden (Beschänkung Bitget-API). <br>
-                Die Auswertung der Kerzen erfolgt nur zum Close-Kurs der Kerze. Das bedeutet, 
-                dass Grid-Auslöser innerhalb einer Kerze nicht berücksichtigt werden. In der Regel spielt
-                dies bei einem ausreichend kleinen Intervall (z. B. 1h) keine grosse Rolle. 
-                Tendenziell wird der Gridgewinn dadurch unterschätzt. Mit den aktuell verfügbaren Kerzen
-                und dem 1h-Intervall kann ein Backtesting für einen Monat in die Vergangenheit durchgeführt
-                werden. Das ist in der Regel ausreichend. <br>
-    Mögliche Erweiterungen: <br>
-    Umgehen der Beschränkung der Bitget-API durch "Time-based Pagination".<br>
-    Abarbeiten einer Trade-Queue (open-low-high-close), um auch Grid-Auslöser innerhalb einer Kerze zu berücksichtigen.<br>
-    
-    
-    </div>
-    """, unsafe_allow_html=True)
-    
     jetzt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if 'bot_version' in results:
-        full_status = f"{results['bot_version']} | ui.py v30, {jetzt}"
+        full_status = f"{results['bot_version']} | ui.py v20, {jetzt}"
         st.caption(full_status)
 
 

@@ -15,16 +15,16 @@
 # was zu unerwünschten Effekten führen kann.
 #  
 # initial_price: Muss überarbeitet werden, es ist nicht einfach das mittlere
-# Grid-Level, sondern der Preis der ersten Kerze. --> erledigt
+# Grid-Level, sondern der Preis der ersten Kerze.
 # initial_coin muss ebenfalls überarbeitet werden, da es nicht einfach 50% des Investments sind,
-# sondern proportional zur Anzahl Grids oberhalb von initial_price. --> erledigt
+# sondern proportional zur Anzahl Grids oberhalb von initial_price.
 # Grid-Linien werden noch nicht angezeigt und Trading-Pfeile falsch. --> erledigt
 # Trick, um mehr Vergangenheitsdaten zu erhalten (...).
 # Berechnung ist ineffizient. Prüfen, ob diese lineare Interpolation nötig ist. --> Interpolation gelöscht
-# Prüfen, ob das Accounting von Gebühren und Profit korrekt ist. --> erledigt
+# Prüfen, ob das Accounting von Gebühren und Profit korrekt ist.
 # Design des Dashboards anhand von Bitget und Binance.
 # Verhalten, wenn der Kurs das Grid überschreitet, muss noch getestet werden. --> scheint zu stimmen
-# Initiale Verteillogik; Reservierte Gebühren; Vorsicht, dass das Geld nicht ausgeht. --> erledigt
+# Initiale Verteillogik; Reservierte Gebühren; Vorsicht, dass das Geld nicht ausgeht. 
 
 
 import numpy as np
@@ -71,8 +71,7 @@ class GridBot:
         self.grids: Dict[float, GridState] = {}
         self.last_price = initial_price
         self.last_traded_price = None
-        self.total_investment = total_investment
-       
+        
         # FIFO inventory tracking (amount, buy_price, timestamp)
         self.coin_inventory: List[Tuple[float, float, pd.Timestamp]] = []
         
@@ -211,9 +210,6 @@ class GridBot:
     def process_candle(self, candle: pd.Series):
         try:
             current_price = float(candle['close'])
-            date_str = pd.to_datetime(candle['timestamp']).strftime('%Y-%m-%d')
-            portfolio_value = self.position['usdt'] + self.position['coin'] * current_price
-            self.daily_values[date_str] = portfolio_value
             prev_price = self.last_price if self.last_price is not None else float(candle['open'])
             last_traded_price = self.last_traded_price if self.last_traded_price is not None else prev_price    
 
@@ -366,23 +362,7 @@ def simulate_grid_bot(df: pd.DataFrame,
         # Calculate total profit (including unrealized)
         total_profit = final_value - total_investment
         total_fees = sum(t['fee'] for t in bot.trade_log)
-
-        # Tageszeitreihe auffüllen
-        daily_series = pd.Series(bot.daily_values)
-        daily_series.index = pd.to_datetime(daily_series.index)
-
-        # Erstelle vollständige Datumsliste von Start bis Ende
-        start = df['timestamp'].dt.date.min()
-        end = df['timestamp'].dt.date.max()
-        all_days = pd.date_range(start=start, end=end, freq='D')
-
-        # Fehlende Tage mit Vortageswert auffüllen
-        filled_series = daily_series.reindex(all_days).ffill()
-
-        # In dict zurückkonvertieren
-        filled_daily_values = {d.strftime('%Y-%m-%d'): float(v) for d, v in filled_series.items() if not pd.isna(v)}
-
-
+        
         return {
             'initial_investment': total_investment,
             'final_value': final_value,
@@ -400,7 +380,6 @@ def simulate_grid_bot(df: pd.DataFrame,
             'final_price': final_price,
             'price_change_pct': ((final_price - initial_price) / initial_price) * 100,
             'bot_version': BOT_VERSION,
-            'daily_values': filled_daily_values,
             'error': None
         }
     except Exception as e:
@@ -420,6 +399,5 @@ def simulate_grid_bot(df: pd.DataFrame,
             'final_price': 0.0,
             'price_change_pct': 0.0,
             'bot_version': BOT_VERSION,
-            'daily_values': 0.0,
             'error': str(e)
         }

@@ -1,3 +1,6 @@
+# app.py - Grid Bot Simulator
+# Stabile Version
+
 import streamlit as st
 from datetime import date, timedelta
 from components.ui import get_user_settings, render_chart_and_metrics, display_bot_results, plot_simulation_pattern
@@ -7,7 +10,7 @@ from services.simulator import generate_simulated_data
 
 # Seiteneinstellungen
 st.set_page_config(page_title="Grid Bot Simulator", layout="wide")
-st.title("📈 Grid Bot Simulator")
+st.title("📈 Grid Bot Simulator (Spot)")
 
 # Initialize session state
 if 'prev_settings' not in st.session_state:
@@ -111,6 +114,25 @@ trade_log = st.session_state.results.get("trade_log") if st.session_state.result
 #                          grid_lines=grid_lines,
 #                          trade_log=trade_log)
 
+# results = st.session_state.get("results")
+# # Speichere Bot-Einstellungen mit ab
+# results["bot_params"] = user_settings["bot_params"]
+# st.session_state.results = results
+
+
+results = st.session_state.get("results")
+
+# Nur weitermachen, wenn Ergebnisse existieren
+if results is not None:
+    results["bot_params"] = user_settings.get("bot_params", {})
+    st.session_state.results = results
+#else:
+ #   st.warning("⚠️ Simulationsergebnisse fehlen – keine bot_params gespeichert.")
+
+
+
+daily_values = results.get("daily_values") if results else None
+
 render_chart_and_metrics(
     df,
     symbol,
@@ -119,7 +141,8 @@ render_chart_and_metrics(
     user_settings["show_volume"],
     grid_lines=grid_lines,
     trade_log=trade_log,
-    show_grid_lines=user_settings.get("show_grid_lines", False)
+    show_grid_lines=user_settings.get("show_grid_lines", False),
+    daily_values=daily_values
 )
 
 
