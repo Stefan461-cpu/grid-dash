@@ -451,7 +451,7 @@ def render_colored_metric(col, label: str, value: float, unit: str = "%", overri
         {label}
     </div>
     <div style="font-size: 2.25rem; line-height: 1.35; font-weight: 450; color: {farbe}; {background}">
-        {value:.{precision}f} {unit}
+        {value:,.{precision}f} {unit}
     </div>
     """, unsafe_allow_html=True)
 
@@ -979,6 +979,11 @@ def display_bot_results(results, df=None):
                 "Reservierte Fees",
                 f"{reserve_usdt:,.2f} USDT + {reserve_coin:,.4f} COIN"
             ), unsafe_allow_html=True)
+            st.markdown(render_entry(
+                "Laufzeit",
+                f"{(end_time - start_time).days:,.0f} Tage"
+            ), unsafe_allow_html=True)
+
             # st.markdown(render_entry("Reservierte Fees", f"{lower:.4f} – {upper:.4f} USDT"), unsafe_allow_html=True)
             # st.markdown(render_entry("Anzahl Grids", num_grids), unsafe_allow_html=True)
  
