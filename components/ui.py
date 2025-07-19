@@ -1183,7 +1183,7 @@ def display_bot_results(results, df=None):
     
     jetzt = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if 'bot_version' in results:
-        full_status = f"{results['bot_version']} | ui.py v30, {jetzt}"
+        full_status = f"Stefan Ott | {results['bot_version']} | ui.py v30, {jetzt}"
         st.caption(full_status)
 
 
