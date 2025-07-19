@@ -1,0 +1,20 @@
+[server]
+port = 8502
+runOnSave = true       # Auto-Reload bei Speichern
+# headless = true        # kein Browser-Popup
+fileWatcherType = "poll"  # statt "auto" bzw. "watchdog"
+# fileWatcherType = "none"  # (noch radikaler: ganz ausschalten)
+
+[logger]
+level = "error"
+
+[client]
+showErrorDetails = false
+
+[theme]
+base="dark"
+primaryColor="#009EE0"
+backgroundColor="#000000"
+secondaryBackgroundColor="#262730"
+textColor="#FAFAFA"
+font="sans serif"
