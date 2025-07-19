@@ -18,3 +18,7 @@ backgroundColor="#000000"
 secondaryBackgroundColor="#262730"
 textColor="#FAFAFA"
 font="sans serif"
+
+[general]
+# Das ist entscheidend:
+target = "app.py"
