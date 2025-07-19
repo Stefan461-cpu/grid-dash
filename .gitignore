@@ -7,7 +7,7 @@ __pycache__/
 .venv/
 
 # Streamlit cache
-.streamlit/
+# .streamlit/
 
 # VS Code settings
 .vscode/
