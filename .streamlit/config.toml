@@ -1,5 +1,5 @@
 [server]
-port = 8502
+# port = 8502
 runOnSave = true       # Auto-Reload bei Speichern
 # headless = true        # kein Browser-Popup
 fileWatcherType = "poll"  # statt "auto" bzw. "watchdog"
